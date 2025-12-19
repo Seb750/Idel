@@ -1448,13 +1448,15 @@
     });
 
     // ---------- NAV ----------
-    $$(".nav-item").forEach((btn) => {
+    const navItems = $$(".nav-item");
+    const screens = $$(".screen");
+
+    navItems.forEach((btn) => {
       btn.addEventListener("click", () => {
-        $$(".nav-item").forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-        const screen = btn.dataset.screen;
-        $$(".screen").forEach((s) => {
-          s.classList.toggle("active", s.id === "screen-" + screen);
+        const screen = "screen-" + btn.dataset.screen;
+        navItems.forEach((b) => b.classList.toggle("active", b === btn));
+        screens.forEach((s) => {
+          s.classList.toggle("active", s.id === screen);
         });
       });
     });
