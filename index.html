@@ -1005,6 +1005,19 @@
       font-size: 11px;
     }
 
+    #graphCanvas canvas {
+      width: 100%;
+      height: 100%;
+      border-radius: 12px;
+    }
+
+    .graph-empty {
+      margin-top: 6px;
+      font-size: 10px;
+      color: var(--text-soft);
+      text-align: center;
+    }
+
     .rappel-row {
       display: flex;
       flex-direction: column;
@@ -1687,8 +1700,9 @@
 
       <div class="graph-body">
         <div id="graphCanvas">
-          Graphique à venir (placeholder).
+          <canvas id="graphPlot" aria-label="Graphique des constantes" role="img"></canvas>
         </div>
+        <div class="graph-empty" id="graphEmpty">Ajoute des constantes pour afficher les courbes.</div>
       </div>
 
       <div class="graph-footer">
@@ -2049,10 +2063,119 @@
             </div>
           `;
 
-          miniList.appendChild(item);
-        });
+      miniList.appendChild(item);
+    });
 
       updateTabCounts();
+      renderGraph();
+    }
+
+    function renderGraph() {
+      const canvas = $("#graphPlot");
+      const emptyEl = $("#graphEmpty");
+      if (!canvas) return;
+
+      const data = load("constantes", [])
+        .slice()
+        .sort((a, b) => (a.dateTime || 0) - (b.dateTime || 0))
+        .slice(-10);
+
+      const ctx = canvas.getContext("2d");
+      const { width: cssWidth, height: cssHeight } = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(cssWidth * dpr));
+      canvas.height = Math.max(1, Math.floor(cssHeight * dpr));
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+      if (!data.length) {
+        if (emptyEl) emptyEl.style.display = "block";
+        ctx.fillStyle = "rgba(148, 163, 184, 0.7)";
+        ctx.font = "11px system-ui";
+        ctx.textAlign = "center";
+        ctx.fillText("Aucune donnée à afficher.", cssWidth / 2, cssHeight / 2);
+        return;
+      }
+
+      if (emptyEl) emptyEl.style.display = "none";
+
+      const series = [
+        {
+          key: "taSyst",
+          label: "TA",
+          color: "#f97316",
+          values: data.map((d) => Number(d.taSyst)).filter((v) => !Number.isNaN(v)),
+        },
+        {
+          key: "spo2",
+          label: "SpO₂",
+          color: "#22c55e",
+          values: data.map((d) => Number(d.spo2)).filter((v) => !Number.isNaN(v)),
+        },
+        {
+          key: "temp",
+          label: "T°",
+          color: "#3b82f6",
+          values: data.map((d) => Number(d.temp)).filter((v) => !Number.isNaN(v)),
+        },
+        {
+          key: "fc",
+          label: "FC",
+          color: "#facc15",
+          values: data.map((d) => Number(d.fc)).filter((v) => !Number.isNaN(v)),
+        },
+      ];
+
+      const allValues = series.flatMap((s) => s.values);
+      const minValue = Math.min(...allValues);
+      const maxValue = Math.max(...allValues);
+      const padding = 12;
+      const chartWidth = cssWidth - padding * 2;
+      const chartHeight = cssHeight - padding * 2;
+      const range = maxValue - minValue || 1;
+
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.25)";
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 3; i += 1) {
+        const y = padding + (chartHeight / 3) * i;
+        ctx.beginPath();
+        ctx.moveTo(padding, y);
+        ctx.lineTo(cssWidth - padding, y);
+        ctx.stroke();
+      }
+
+      series.forEach((serie) => {
+        const points = data.map((entry, index) => {
+          const value = Number(entry[serie.key]);
+          if (Number.isNaN(value)) return null;
+          const x = padding + (chartWidth / Math.max(1, data.length - 1)) * index;
+          const y = padding + chartHeight - ((value - minValue) / range) * chartHeight;
+          return { x, y };
+        });
+
+        const filtered = points.filter(Boolean);
+        if (!filtered.length) return;
+
+        ctx.strokeStyle = serie.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        filtered.forEach((pt, idx) => {
+          if (idx === 0) {
+            ctx.moveTo(pt.x, pt.y);
+          } else {
+            ctx.lineTo(pt.x, pt.y);
+          }
+        });
+        ctx.stroke();
+
+        ctx.fillStyle = serie.color;
+        filtered.forEach((pt) => {
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      });
     }
 
     function normalizeSpaces(value) {
@@ -2398,6 +2521,7 @@
 
       function open() {
         backdrop.classList.add("active");
+        renderGraph();
       }
 
       function close() {
