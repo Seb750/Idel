@@ -431,6 +431,38 @@
       font-size: 13px;
     }
 
+    .btn-primary:disabled,
+    .btn-secondary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .const-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .const-actions .btn-primary,
+    .const-actions .btn-secondary {
+      flex: 1;
+    }
+
+    .const-toast {
+      margin-top: 8px;
+      padding: 6px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(34, 197, 94, 0.35);
+      background: rgba(34, 197, 94, 0.12);
+      color: #bbf7d0;
+      font-size: 11px;
+      display: none;
+    }
+
+    .const-toast.show {
+      display: block;
+    }
+
     .list {
       margin-top: 6px;
       display: flex;
@@ -1203,10 +1235,17 @@
             </div>
           </div>
 
-          <button class="btn-primary" id="btnSaveConst">
-            <span class="icon">💾</span>
-            <span>Enregistrer les constantes</span>
-          </button>
+          <div class="const-actions">
+            <button class="btn-primary" id="btnSaveConst">
+              <span class="icon">💾</span>
+              <span>Enregistrer les constantes</span>
+            </button>
+            <button class="btn-secondary" id="btnReplicateConst" type="button">
+              <span class="icon">🧩</span>
+              <span>Répliquer la dernière</span>
+            </button>
+          </div>
+          <div class="const-toast" id="constToast" role="status" aria-live="polite"></div>
         </div>
 
         <div class="card">
@@ -1679,6 +1718,8 @@
 
     function setupConstantes() {
       const btn = $("#btnSaveConst");
+      const replicateBtn = $("#btnReplicateConst");
+      const toast = $("#constToast");
       const dateEl = $("#constDate");
       const timeEl = $("#constTime");
       const taSyst = $("#taSyst");
@@ -1690,6 +1731,53 @@
       const notes = $("#constNotes");
 
       if (!btn) return;
+
+      const fillDateTimeIfEmpty = () => {
+        const now = new Date();
+        if (dateEl && !dateEl.value) {
+          dateEl.value = now.toISOString().slice(0, 10);
+        }
+        if (timeEl && !timeEl.value) {
+          timeEl.value = now.toTimeString().slice(0, 5);
+        }
+      };
+
+      const getLatestConstante = () => {
+        const list = load("constantes", []);
+        if (!list.length) return null;
+        return list
+          .slice()
+          .sort((a, b) => (b.dateTime || 0) - (a.dateTime || 0))[0];
+      };
+
+      const applyConstante = (entry) => {
+        if (!entry) return false;
+        taSyst.value = entry.taSyst || "";
+        taDiast.value = entry.taDiast || "";
+        spo2.value = entry.spo2 || "";
+        fc.value = entry.fc || "";
+        temp.value = entry.temp || "";
+        poids.value = entry.poids || "";
+        notes.value = entry.notes || "";
+        return true;
+      };
+
+      let toastTimer;
+      const showToast = (message) => {
+        if (!toast) return;
+        toast.textContent = message;
+        toast.classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+          toast.classList.remove("show");
+        }, 2500);
+      };
+
+      const updateReplicateState = () => {
+        if (!replicateBtn) return;
+        const latest = getLatestConstante();
+        replicateBtn.disabled = !latest;
+      };
 
       btn.addEventListener("click", () => {
         const list = load("constantes", []);
@@ -1721,8 +1809,24 @@
         temp.value = "";
         poids.value = "";
         notes.value = "";
+        updateReplicateState();
       });
 
+      if (replicateBtn) {
+        replicateBtn.addEventListener("click", () => {
+          const latest = getLatestConstante();
+          if (applyConstante(latest)) {
+            showToast("Dernière mesure répliquée.");
+          }
+        });
+      }
+
+      fillDateTimeIfEmpty();
+      const latest = getLatestConstante();
+      if (applyConstante(latest)) {
+        showToast("Dernière mesure injectée.");
+      }
+      updateReplicateState();
       renderConstantes();
     }
 
