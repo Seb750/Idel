@@ -483,6 +483,47 @@
       gap: 6px;
     }
 
+    .ordo-row {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: start;
+    }
+
+    .ordo-row input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      margin-top: 2px;
+    }
+
+    .ordo-row .ordo-text {
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .ordo-row .ordo-text strong {
+      font-size: 12px;
+      display: block;
+    }
+
+    .icon-button {
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      background: rgba(15, 23, 42, 0.8);
+      color: var(--text-soft);
+      font-size: 10px;
+      padding: 4px 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .ordo-row.done .ordo-text {
+      opacity: 0.6;
+      text-decoration: line-through;
+    }
+
     .toolbar {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 110px);
@@ -1495,6 +1536,10 @@
 
           <div class="subtext">
             <span>📷</span>
+            <span>Colle l’ordonnance en texte brut, puis clique pour la transformer en liste de soins à cocher.</span>
+          </div>
+          <div class="subtext">
+            <span>📷</span>
             <span>Dans une v2 : photo de l’ordonnance → OCR → structuration automatique.</span>
           </div>
         </div>
@@ -1507,6 +1552,7 @@
             </div>
           </div>
           <div class="list" id="ordoList"></div>
+          <div class="empty-state" id="ordoEmpty">Aucun traitement structuré pour le moment.</div>
         </div>
       </section>
 
@@ -1742,7 +1788,7 @@
       const counts = {
         transmissions: load("transmissions", []).length,
         constantes: load("constantes", []).length,
-        ordos: load("ordos", []).length,
+        ordos: load("ordosStructured", []).length,
         rappels: load("memos", []).length,
       };
 
@@ -2009,6 +2055,54 @@
       updateTabCounts();
     }
 
+    function normalizeSpaces(value) {
+      return (value || "").replace(/\s+/g, " ").trim();
+    }
+
+    function parseOrdonnance(rawText) {
+      // Exemple test 1 :
+      // DOLIPRANE 1 g, 1 cp matin midi soir, 7 jours, PO
+      // AMOXICILLINE 500 mg 1 gélule 3x/j pendant 10 jours, PO
+      // Exemple test 2 :
+      // Lovenox 0,4 mL SC 1x/j pendant 7 jours
+      // Ventoline 2 bouffées matin et soir si besoin, inhalation
+      const lines = (rawText || "")
+        .split(/\n|•|-/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      return lines.map((line, index) => {
+        const clean = normalizeSpaces(line);
+        const doseMatch = clean.match(/\b\d+[,.]?\d*\s?(mg|g|ui|mcg|µg|ml|mL|%|amp|cp|gélule|bouffée)s?\b/i);
+        const voieMatch = clean.match(/\b(IV|IM|SC|PO|per os|sublinguale|inhalation|patch|topique)\b/i);
+        const freqMatch = clean.match(/\b(\d+x\/j|\d+\s?x\/j|matin|midi|soir|coucher|toutes?\s?\d+\s?h|q\d+h)\b/gi);
+        const dureeMatch = clean.match(/\b(\d+\s?(jours?|semaines?|mois)|jusqu['’]a nouvel ordre|pendant\s+\d+\s?(jours?|semaines?|mois))\b/i);
+
+        const medicament = clean
+          .replace(doseMatch?.[0] || "", "")
+          .replace(voieMatch?.[0] || "", "")
+          .replace(dureeMatch?.[0] || "", "")
+          .replace(freqMatch?.join(" ") || "", "")
+          .replace(/,\s*/g, " ")
+          .replace(/\s{2,}/g, " ")
+          .trim();
+
+        const notes = [];
+        if (clean.match(/si besoin|prn/i)) notes.push("Si besoin");
+
+        return {
+          id: `${Date.now()}-${index}`,
+          medicament: medicament || "Traitement",
+          dose: doseMatch ? doseMatch[0] : "",
+          frequence: freqMatch ? normalizeSpaces(freqMatch.join(" ")) : "",
+          voie: voieMatch ? voieMatch[0] : "",
+          duree: dureeMatch ? normalizeSpaces(dureeMatch[0]) : "",
+          notes: notes.join(" "),
+          done: false,
+        };
+      });
+    }
+
     function setupConstantes() {
       const btn = $("#btnSaveConst");
       const dateEl = $("#constDate");
@@ -2062,48 +2156,81 @@
       const rawEl = $("#ordoRaw");
       const btn = $("#btnParseOrdo");
       const listEl = $("#ordoList");
+      const emptyEl = $("#ordoEmpty");
       if (!rawEl || !btn || !listEl) return;
 
+      function getReadableLabel(item) {
+        const parts = [
+          item.dose,
+          item.frequence,
+          item.voie,
+          item.duree,
+          item.notes,
+        ].filter(Boolean);
+        return parts.length ? parts.join(" – ") : "À préciser";
+      }
+
       function render() {
-        const ordos = load("ordos", []);
+        const ordos = load("ordosStructured", []);
         listEl.innerHTML = "";
 
-        ordos
-          .slice()
-          .reverse()
-          .forEach((o) => {
-            const div = document.createElement("div");
-            div.className = "list-item";
+        ordos.forEach((o) => {
+          const div = document.createElement("div");
+          div.className = `list-item ordo-row ${o.done ? "done" : ""}`;
 
-            const lines = (o.raw || "")
-              .split("\n")
-              .map((l) => l.trim())
-              .filter(Boolean);
+          div.innerHTML = `
+            <input type="checkbox" ${o.done ? "checked" : ""} aria-label="Fait" />
+            <div class="ordo-text">
+              <strong>${o.medicament || "Traitement"}</strong>
+              <span>${getReadableLabel(o)}</span>
+            </div>
+            <button class="icon-button" type="button" aria-label="Modifier">
+              <span>✏️</span>
+              <span>Éditer</span>
+            </button>
+          `;
 
-            const title = lines[0] || "Ordonnance";
-            const rest = lines.slice(1).join("<br>");
+          const checkbox = div.querySelector("input[type='checkbox']");
+          const editBtn = div.querySelector("button");
 
-            div.innerHTML = `
-              <div>
-                <div class="list-meta">
-                  <span>${o.dateLabel || "Date à préciser"}</span>
-                  <span class="tag type">Médication</span>
-                </div>
-                <div style="margin-top: 4px; font-size: 11px;">
-                  <strong>${title}</strong><br>
-                  ${rest}
-                </div>
-              </div>
-              <div class="list-actions">
-                <span class="chip">
-                  <span class="dot"></span>
-                  Ordo
-                </span>
-              </div>
-            `;
-
-            listEl.appendChild(div);
+          checkbox.addEventListener("change", () => {
+            o.done = checkbox.checked;
+            save("ordosStructured", ordos);
+            render();
           });
+
+          editBtn.addEventListener("click", () => {
+            const medicament = prompt("Médicament", o.medicament || "");
+            if (medicament === null) return;
+            const dose = prompt("Dose (ex : 500 mg)", o.dose || "");
+            if (dose === null) return;
+            const frequence = prompt("Fréquence (ex : 3x/j, matin/midi/soir)", o.frequence || "");
+            if (frequence === null) return;
+            const voie = prompt("Voie (ex : PO, IV, SC)", o.voie || "");
+            if (voie === null) return;
+            const duree = prompt("Durée (ex : 7 jours)", o.duree || "");
+            if (duree === null) return;
+            const notes = prompt("Notes", o.notes || "");
+            if (notes === null) return;
+
+            Object.assign(o, {
+              medicament: medicament.trim() || o.medicament,
+              dose: dose.trim(),
+              frequence: frequence.trim(),
+              voie: voie.trim(),
+              duree: duree.trim(),
+              notes: notes.trim(),
+            });
+            save("ordosStructured", ordos);
+            render();
+          });
+
+          listEl.appendChild(div);
+        });
+
+        if (emptyEl) {
+          emptyEl.style.display = ordos.length ? "none" : "block";
+        }
 
         updateTabCounts();
       }
@@ -2112,12 +2239,10 @@
         const raw = rawEl.value.trim();
         if (!raw) return;
 
-        const dateTime = Date.now();
-        const dateLabel = formatDateTimeLabel(new Date(dateTime));
-
-        const ordos = load("ordos", []);
-        ordos.push({ raw, dateTime, dateLabel });
-        save("ordos", ordos);
+        const parsed = parseOrdonnance(raw);
+        const ordos = load("ordosStructured", []);
+        ordos.push(...parsed);
+        save("ordosStructured", ordos);
 
         rawEl.value = "";
         render();
