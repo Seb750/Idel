@@ -1622,6 +1622,27 @@
       renderTransmissions();
     }
 
+    function setupGlobalSaveShortcuts() {
+      document.addEventListener("keydown", (event) => {
+        if (!(event.ctrlKey || event.metaKey)) return;
+        if (event.key !== "Enter") return;
+
+        const activeScreen = document.querySelector(".screen.active");
+        const screenToButton = {
+          "screen-transmissions": "#btnSaveTrans",
+          "screen-constantes": "#btnSaveConst",
+          "screen-memos": "#btnSaveMemo",
+        };
+
+        const selector = activeScreen ? screenToButton[activeScreen.id] : null;
+        const btn = selector ? $(selector) : null;
+
+        if (!btn) return;
+        event.preventDefault();
+        btn.click();
+      });
+    }
+
     function renderConstantes() {
       const miniList = $("#constMiniList");
       if (!miniList) return;
@@ -1973,20 +1994,38 @@
         }
       }
 
+      function focusPrimaryField(screenName) {
+        const activeEl = document.activeElement;
+        if (activeEl && ["INPUT", "TEXTAREA"].includes(activeEl.tagName)) return;
+
+        const primaryFields = {
+          transmissions: "#transText",
+          constantes: "#constNotes",
+          memos: "#memoText",
+        };
+
+        const selector = primaryFields[screenName];
+        const field = selector ? $(selector) : null;
+        if (field) field.focus();
+      }
+
       navItems.forEach((btn) => {
         const screenName = btn.dataset.screen;
         btn.addEventListener("click", () => {
           if (!screenName) return;
           updateActive(screenName);
+          focusPrimaryField(screenName);
         });
       });
 
       updateActive("transmissions");
+      focusPrimaryField("transmissions");
     }
 
     document.addEventListener("DOMContentLoaded", () => {
       setupThemeToggle();
       setupTransmissions();
+      setupGlobalSaveShortcuts();
       setupConstantes();
       setupOrdos();
       setupMemos();
