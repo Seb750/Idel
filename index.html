@@ -310,6 +310,7 @@
     }
 
     input[type="text"],
+    input[type="search"],
     input[type="date"],
     input[type="time"],
     input[type="number"],
@@ -328,6 +329,7 @@
     }
 
     body.light input[type="text"],
+    body.light input[type="search"],
     body.light input[type="date"],
     body.light input[type="time"],
     body.light input[type="number"],
@@ -436,6 +438,37 @@
       display: flex;
       flex-direction: column;
       gap: 6px;
+    }
+
+    .filter-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .filter-row input[type="search"] {
+      flex: 1;
+    }
+
+    .result-badge {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      border: 1px solid rgba(59, 130, 246, 0.6);
+      color: var(--accent-strong);
+      background: rgba(59, 130, 246, 0.12);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.16s ease-out;
+    }
+
+    .result-badge.is-active {
+      opacity: 1;
     }
 
     .list-item {
@@ -1132,6 +1165,17 @@
               <span>Transmissions enregistrées</span>
             </div>
           </div>
+          <div class="filter-row">
+            <input id="transSearch" type="search" placeholder="Rechercher une transmission..." />
+            <select id="transTypeFilter" aria-label="Filtrer par type">
+              <option value="all">Tous types</option>
+              <option value="synthese">Synthèse</option>
+              <option value="incident">Incident</option>
+              <option value="soins">Soins</option>
+              <option value="education">Éducation</option>
+            </select>
+            <span class="result-badge" id="transResultBadge">0 résultat</span>
+          </div>
           <div class="list" id="transList"></div>
         </div>
 
@@ -1299,6 +1343,10 @@
             <span>Ajouter le mémo</span>
           </button>
 
+          <div class="filter-row">
+            <input id="memoSearch" type="search" placeholder="Rechercher un mémo..." />
+            <span class="result-badge" id="memoResultBadge">0 résultat</span>
+          </div>
           <div class="memo-list" id="memoList"></div>
         </div>
       </section>
@@ -1455,6 +1503,13 @@
       }
     }
 
+    function updateResultBadge(badgeEl, count, isActive) {
+      if (!badgeEl) return;
+      const label = `${count} résultat${count > 1 ? "s" : ""}`;
+      badgeEl.textContent = label;
+      badgeEl.classList.toggle("is-active", Boolean(isActive));
+    }
+
     function getDateTimeFromInputs(dateEl, timeEl) {
       const dateValue = dateEl.value;
       const timeValue = timeEl.value;
@@ -1523,16 +1578,39 @@
     function renderTransmissions() {
       const listEl = $("#transList");
       const flashEl = $("#flashList");
+      const searchEl = $("#transSearch");
+      const typeFilterEl = $("#transTypeFilter");
+      const badgeEl = $("#transResultBadge");
       if (!listEl || !flashEl) return;
 
       const transmissions = load("transmissions", []);
+      const storedFilter = load("transmissionsFilter", { text: "", type: "all" });
+      const searchValue = (searchEl ? searchEl.value : storedFilter.text || "")
+        .trim()
+        .toLowerCase();
+      const typeValue = (typeFilterEl ? typeFilterEl.value : storedFilter.type || "all")
+        .trim();
       listEl.innerHTML = "";
       flashEl.innerHTML = "";
 
-      transmissions
+      const filtered = transmissions
         .slice()
-        .sort((a, b) => (b.dateTime || 0) - (a.dateTime || 0))
-        .forEach((item) => {
+        .filter((item) => {
+          const textMatch = searchValue
+            ? (item.text || "").toLowerCase().includes(searchValue)
+            : true;
+          const typeMatch = typeValue && typeValue !== "all" ? item.type === typeValue : true;
+          return textMatch && typeMatch;
+        })
+        .sort((a, b) => (b.dateTime || 0) - (a.dateTime || 0));
+
+      updateResultBadge(
+        badgeEl,
+        filtered.length,
+        Boolean(searchValue || (typeValue && typeValue !== "all"))
+      );
+
+      filtered.forEach((item) => {
           const dateLabel =
             item.dateLabel ||
             (item.dateTime ? formatDateTimeLabel(new Date(item.dateTime)) : "");
@@ -1593,6 +1671,8 @@
       const typeEl = $("#transType");
       const textEl = $("#transText");
       const flashEl = $("#transFlash");
+      const searchEl = $("#transSearch");
+      const typeFilterEl = $("#transTypeFilter");
 
       if (!btn || !dateEl || !timeEl || !typeEl || !textEl || !flashEl) return;
 
@@ -1618,6 +1698,23 @@
         textEl.value = "";
         flashEl.checked = false;
       });
+
+      if (searchEl || typeFilterEl) {
+        const storedFilter = load("transmissionsFilter", { text: "", type: "all" });
+        if (searchEl && storedFilter.text) searchEl.value = storedFilter.text;
+        if (typeFilterEl && storedFilter.type) typeFilterEl.value = storedFilter.type;
+
+        const persistFilter = () => {
+          save("transmissionsFilter", {
+            text: searchEl ? searchEl.value.trim() : storedFilter.text || "",
+            type: typeFilterEl ? typeFilterEl.value : storedFilter.type || "all",
+          });
+          renderTransmissions();
+        };
+
+        if (searchEl) searchEl.addEventListener("input", persistFilter);
+        if (typeFilterEl) typeFilterEl.addEventListener("change", persistFilter);
+      }
 
       renderTransmissions();
     }
@@ -1798,16 +1895,28 @@
       const timeEl = $("#memoTime");
       const btn = $("#btnSaveMemo");
       const listEl = $("#memoList");
+      const searchEl = $("#memoSearch");
+      const badgeEl = $("#memoResultBadge");
       if (!textEl || !dateEl || !timeEl || !btn || !listEl) return;
 
       function render() {
         const memos = load("memos", []);
         listEl.innerHTML = "";
+        const storedFilter = load("memoFilter", { text: "" });
+        const searchValue = (searchEl ? searchEl.value : storedFilter.text || "")
+          .trim()
+          .toLowerCase();
 
-        memos
+        const filtered = memos
           .slice()
-          .sort((a, b) => (a.dateTime || 0) - (b.dateTime || 0))
-          .forEach((m) => {
+          .filter((memo) =>
+            searchValue ? (memo.text || "").toLowerCase().includes(searchValue) : true
+          )
+          .sort((a, b) => (a.dateTime || 0) - (b.dateTime || 0));
+
+        updateResultBadge(badgeEl, filtered.length, Boolean(searchValue));
+
+        filtered.forEach((m) => {
             const dt = m.dateTime ? new Date(m.dateTime) : null;
             const dateLabel = dt ? formatDateTimeLabel(dt) : "Date/heure ?";
 
@@ -1845,6 +1954,18 @@
         textEl.value = "";
         render();
       });
+
+      if (searchEl) {
+        const storedFilter = load("memoFilter", { text: "" });
+        if (storedFilter.text) searchEl.value = storedFilter.text;
+
+        const persistFilter = () => {
+          save("memoFilter", { text: searchEl.value.trim() });
+          render();
+        };
+
+        searchEl.addEventListener("input", persistFilter);
+      }
 
       render();
     }
