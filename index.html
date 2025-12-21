@@ -596,6 +596,64 @@
       cursor: pointer;
     }
 
+    .patient-ocr {
+      margin-top: 12px;
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px dashed rgba(148, 163, 184, 0.6);
+      background: rgba(15, 23, 42, 0.7);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .ocr-status {
+      font-size: 10px;
+      color: var(--text-soft);
+      padding: 6px 8px;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      white-space: pre-line;
+    }
+
+    .ocr-status.success {
+      color: #bbf7d0;
+      border-color: rgba(34, 197, 94, 0.6);
+      background: rgba(34, 197, 94, 0.12);
+    }
+
+    .ocr-status.warning {
+      color: #fef9c3;
+      border-color: rgba(250, 204, 21, 0.6);
+      background: rgba(250, 204, 21, 0.12);
+    }
+
+    .ocr-status.error {
+      color: #fecaca;
+      border-color: rgba(248, 113, 113, 0.6);
+      background: rgba(248, 113, 113, 0.12);
+    }
+
+    .ocr-notes {
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      padding: 6px 8px;
+      background: rgba(15, 23, 42, 0.7);
+      font-size: 11px;
+    }
+
+    .ocr-notes summary {
+      cursor: pointer;
+      color: var(--text-soft);
+      font-size: 11px;
+    }
+
+    .ocr-hints {
+      font-size: 10px;
+      color: var(--text-soft);
+    }
+
     .patient-info-grid {
       display: grid;
       grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.2fr);
@@ -1358,6 +1416,44 @@
               </span>
             </div>
           </div>
+
+          <div class="patient-ocr">
+            <button class="btn-secondary" id="btnImportPatientOcr" type="button">
+              <span class="icon">📷</span>
+              <span>Importer depuis capture écran Contact</span>
+            </button>
+            <input id="patientOcrInput" type="file" accept="image/*" hidden />
+            <div class="ocr-status" id="patientOcrStatus">Aucune image importée pour le moment</div>
+            <div class="ocr-hints" id="patientOcrHints"></div>
+            <details class="ocr-notes">
+              <summary>Notes brutes OCR</summary>
+              <textarea id="patientOcrNotes" placeholder="Le texte brut OCR s’affichera ici pour vérification…"></textarea>
+            </details>
+          </div>
+
+          <div style="margin-top: 12px;">
+            <div class="field-group">
+              <label for="patientNameInput">Nom / Prénom</label>
+              <input id="patientNameInput" type="text" placeholder="Ex : Jeanne Dupont" />
+            </div>
+            <div class="field-group">
+              <label for="patientPhoneInput">Téléphone</label>
+              <input id="patientPhoneInput" type="tel" placeholder="Ex : 06 12 34 56 78" />
+            </div>
+            <div class="field-group">
+              <label for="patientAddressInput">Adresse</label>
+              <textarea id="patientAddressInput" placeholder="Ex : 12 rue de la Tour, 75000 Paris"></textarea>
+            </div>
+            <div class="field-group">
+              <label for="patientSummaryInput">Résumé patient / consignes</label>
+              <textarea id="patientSummaryInput" placeholder="Ex : Pansement VAC jambe gauche, surveiller TA + SpO₂."></textarea>
+            </div>
+            <button class="btn-primary" id="btnSavePatient" type="button">
+              <span class="icon">💾</span>
+              <span>Enregistrer le patient</span>
+            </button>
+            <div class="subtext" id="patientSaveStatus"></div>
+          </div>
         </div>
 
         <div class="card">
@@ -1433,6 +1529,7 @@
     <span id="debugText">Écran actif : Transmissions</span>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script>
     const $ = (sel) => document.querySelector(sel);
     const $$ = (sel) => document.querySelectorAll(sel);
@@ -1854,35 +1951,88 @@
       const phoneEl = $("#patientPhone");
       const nameEl = $("#patientName");
       const initialEl = $("#patientInitial");
+      const summaryEl = $("#patientSummary");
 
       const btnCopy = $("#btnCopyAddress");
       const btnMaps = $("#btnOpenMaps");
       const btnWaze = $("#btnOpenWaze");
 
-      const chipName = $("#patientSummary");
+      const nameInput = $("#patientNameInput");
+      const phoneInput = $("#patientPhoneInput");
+      const addressInput = $("#patientAddressInput");
+      const summaryInput = $("#patientSummaryInput");
+      const btnSave = $("#btnSavePatient");
+      const saveStatus = $("#patientSaveStatus");
+
+      const btnImportOcr = $("#btnImportPatientOcr");
+      const ocrInput = $("#patientOcrInput");
+      const ocrStatus = $("#patientOcrStatus");
+      const ocrNotes = $("#patientOcrNotes");
+      const ocrHints = $("#patientOcrHints");
 
       const stored = load("patient", null);
-      if (stored) {
-        if (stored.name) nameEl.textContent = stored.name;
-        if (stored.address) addrEl.textContent = stored.address;
-        if (stored.phone) phoneEl.textContent = stored.phone;
-        if (stored.summary) chipName.textContent = stored.summary;
+      const basePatient = {
+        name: nameEl?.textContent || "",
+        address: addrEl?.textContent || "",
+        phone: phoneEl?.textContent || "",
+        summary: summaryEl?.textContent || "",
+      };
+
+      const currentPatient = stored ? { ...basePatient, ...stored } : basePatient;
+
+      function updatePatientPreview() {
+        if (nameEl && nameInput) nameEl.textContent = nameInput.value.trim() || "Patient";
+        if (addrEl && addressInput) addrEl.textContent = addressInput.value.trim() || "";
+        if (phoneEl && phoneInput) phoneEl.textContent = phoneInput.value.trim() || "";
+        if (summaryEl && summaryInput) summaryEl.textContent = summaryInput.value.trim() || "";
+
+        const name = nameEl?.textContent || "";
+        const firstLetter = name.trim().charAt(0).toUpperCase() || "J";
+        if (initialEl) initialEl.textContent = firstLetter;
       }
+
+      function setPatientInputs(data) {
+        if (nameInput && data.name) nameInput.value = data.name.trim();
+        if (phoneInput && data.phone) phoneInput.value = data.phone.trim();
+        if (addressInput && data.address) addressInput.value = data.address.trim();
+        if (summaryInput && data.summary) summaryInput.value = data.summary.trim();
+        updatePatientPreview();
+      }
+
+      if (nameInput) nameInput.value = currentPatient.name || "";
+      if (phoneInput) phoneInput.value = currentPatient.phone || "";
+      if (addressInput) addressInput.value = currentPatient.address || "";
+      if (summaryInput) summaryInput.value = currentPatient.summary || "";
+      updatePatientPreview();
 
       function savePatient() {
-        save("patient", {
-          name: nameEl.textContent,
-          address: addrEl.textContent,
-          phone: phoneEl.textContent,
-          summary: chipName.textContent,
-        });
+        const payload = {
+          name: nameInput?.value.trim() || "",
+          address: addressInput?.value.trim() || "",
+          phone: phoneInput?.value.trim() || "",
+          summary: summaryInput?.value.trim() || "",
+        };
+        save("patient", payload);
+        updatePatientPreview();
 
-        const name = nameEl.textContent || "";
-        const firstLetter = name.trim().charAt(0).toUpperCase() || "J";
-        initialEl.textContent = firstLetter;
+        if (saveStatus) {
+          saveStatus.textContent = "Patient sauvegardé localement ✔";
+          setTimeout(() => {
+            saveStatus.textContent = "";
+          }, 2000);
+        }
       }
 
-      savePatient();
+      if (btnSave) {
+        btnSave.addEventListener("click", savePatient);
+      }
+
+      [nameInput, phoneInput, addressInput, summaryInput].forEach((input) => {
+        if (!input) return;
+        input.addEventListener("input", () => {
+          updatePatientPreview();
+        });
+      });
 
       if (btnCopy) {
         btnCopy.addEventListener("click", async () => {
@@ -1923,6 +2073,133 @@
           const url =
             "https://waze.com/ul?q=" + encodeURIComponent(addr);
           window.open(url, "_blank");
+        });
+      }
+
+      function setOcrStatus(type, message) {
+        if (!ocrStatus) return;
+        ocrStatus.className = "ocr-status";
+        if (type) ocrStatus.classList.add(type);
+        ocrStatus.textContent = message;
+      }
+
+      function parseContactOcr(text) {
+        const rawLines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+        const nameLine =
+          rawLines.find((line) => /[A-Za-zÀ-ÿ]/.test(line) && !/\d/.test(line)) ||
+          rawLines[0] ||
+          "";
+
+        const phoneMatch = text.match(/0[1-9](?:[ .-]?\d{2}){4}/g);
+        const phone = phoneMatch ? phoneMatch[0] : "";
+
+        const streetRegex = /(?:rue|avenue|av\.?|boulevard|bd\.?|chemin|route|impasse|allée|allee|place|quai|résidence|residence|lotissement)/i;
+        let address = "";
+        for (let i = 0; i < rawLines.length; i += 1) {
+          const line = rawLines[i];
+          const nextLine = rawLines[i + 1] || "";
+          const hasNumber = /^\d{1,4}\s+/.test(line);
+          if (hasNumber && streetRegex.test(line)) {
+            const postalLine = /\b\d{5}\b/.test(nextLine) ? nextLine : "";
+            address = postalLine ? `${line}, ${postalLine}` : line;
+            break;
+          }
+        }
+        if (!address) {
+          const postalIndex = rawLines.findIndex((line) => /\b\d{5}\b/.test(line));
+          if (postalIndex > 0) {
+            address = `${rawLines[postalIndex - 1]}, ${rawLines[postalIndex]}`;
+          }
+        }
+
+        return {
+          name: nameLine,
+          phone,
+          address,
+        };
+      }
+
+      function extractHints(text) {
+        const lower = text.toLowerCase();
+        const pathologies = ["cancer", "diabète", "diabete", "bpco", "asthme", "insuffisance", "hta", "alzheimer"];
+        const allergies = ["allergie", "allergique", "pénicilline", "penicilline", "latex", "iode", "arachide"];
+
+        const foundPathologies = pathologies.filter((word) => lower.includes(word));
+        const foundAllergies = allergies.filter((word) => lower.includes(word));
+
+        const hints = [];
+        if (foundPathologies.length) {
+          hints.push(`Indices pathologie : ${[...new Set(foundPathologies)].join(", ")}`);
+        }
+        if (foundAllergies.length) {
+          hints.push(`Indices allergies : ${[...new Set(foundAllergies)].join(", ")}`);
+        }
+        return hints;
+      }
+
+      async function handlePatientOcr(file) {
+        if (!file) return;
+        if (!window.Tesseract) {
+          setOcrStatus("error", "Tesseract.js indisponible. Vérifie la connexion ou recharge la page.");
+          return;
+        }
+
+        setOcrStatus("warning", "OCR en cours…");
+        if (ocrHints) ocrHints.textContent = "";
+
+        try {
+          const result = await window.Tesseract.recognize(file, "fra", {
+            logger: (m) => {
+              if (m.status === "recognizing text" && ocrStatus) {
+                const percent = Math.round((m.progress || 0) * 100);
+                setOcrStatus("warning", `OCR en cours… ${percent}%`);
+              }
+            },
+          });
+
+          const rawText = result?.data?.text || "";
+          if (ocrNotes) ocrNotes.value = rawText.trim();
+
+          const parsed = parseContactOcr(rawText);
+          setPatientInputs(parsed);
+
+          const warnings = [];
+          if (!parsed.phone) warnings.push("Aucun numéro détecté, remplir manuellement.");
+          if (!parsed.address) warnings.push("Aucune adresse détectée, remplir manuellement.");
+
+          const statusLines = [
+            "OCR terminé – champs pré-remplis, vérifie avant d’enregistrer 👌",
+            ...warnings,
+          ];
+          setOcrStatus(warnings.length ? "warning" : "success", statusLines.join("\n"));
+
+          const hints = extractHints(rawText);
+          if (ocrHints) {
+            ocrHints.textContent = hints.length
+              ? `Notes potentielles repérées : ${hints.join(" • ")}`
+              : "";
+          }
+        } catch (error) {
+          console.error(error);
+          setOcrStatus(
+            "error",
+            "Impossible de lire correctement l’image. Vérifie que la capture écran est bien nette et réessaie."
+          );
+        }
+      }
+
+      if (btnImportOcr && ocrInput) {
+        btnImportOcr.addEventListener("click", () => {
+          ocrInput.value = "";
+          ocrInput.click();
+        });
+      }
+
+      if (ocrInput) {
+        ocrInput.addEventListener("change", (event) => {
+          const file = event.target.files?.[0];
+          if (!file) return;
+          handlePatientOcr(file);
         });
       }
     }
