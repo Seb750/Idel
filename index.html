@@ -604,6 +604,13 @@
       font-size: 11px;
     }
 
+    .import-status {
+      margin-top: 6px;
+      font-size: 10px;
+      color: var(--text-soft);
+      text-align: center;
+    }
+
     .patient-info-grid span.label {
       color: var(--text-soft);
       font-size: 10px;
@@ -1330,7 +1337,27 @@
             </div>
           </div>
 
+          <button class="btn-primary" id="btnImportContact">
+            <span class="icon">📸</span>
+            <span>Importer depuis capture Contact iPhone</span>
+          </button>
+          <input
+            id="contactImportInput"
+            type="file"
+            accept="image/*"
+            style="display: none;"
+          />
+          <div class="import-status" id="contactImportStatus"></div>
+
           <div class="patient-info-grid">
+            <div>
+              <span class="label">Nom</span><br />
+              <span id="patientLastName">L</span>
+            </div>
+            <div>
+              <span class="label">Prénom</span><br />
+              <span id="patientFirstName">Mme</span>
+            </div>
             <div>
               <span class="label">Téléphone</span><br />
               <span id="patientPhone">06 00 00 00 00</span>
@@ -1339,6 +1366,25 @@
               <span class="label">Adresse</span><br />
               <span id="patientAddress">12 rue de la Tour, 75000 Paris</span>
             </div>
+            <div>
+              <span class="label">Porte</span><br />
+              <span id="patientDoor">A1</span>
+            </div>
+            <div>
+              <span class="label">Escalier</span><br />
+              <span id="patientStair">153</span>
+            </div>
+            <div>
+              <span class="label">Étage</span><br />
+              <span id="patientFloor">7ème G</span>
+            </div>
+            <div>
+              <span class="label">Interphone</span><br />
+              <span id="patientIntercom">Perrier</span>
+            </div>
+          </div>
+
+          <div class="patient-info-grid">
             <div>
               <span class="label">Infos pratiques</span><br />
               <span id="patientInfos">Digicode, étage, ascenseur, etc.</span>
@@ -1433,6 +1479,7 @@
     <span id="debugText">Écran actif : Transmissions</span>
   </div>
 
+  <script src="https://unpkg.com/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
   <script>
     const $ = (sel) => document.querySelector(sel);
     const $$ = (sel) => document.querySelectorAll(sel);
@@ -1849,43 +1896,312 @@
       render();
     }
 
-    function setupPatient() {
+    function normalizeText(value) {
+      return (value || "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[’‘]/g, "'")
+        .replace(/[“”]/g, '"')
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function splitFullName(fullName) {
+      const safe = (fullName || "").trim();
+      if (!safe) return { firstName: "", lastName: "" };
+      const parts = safe.split(/\s+/);
+      if (parts.length === 1) {
+        return { firstName: parts[0], lastName: "" };
+      }
+      const lastName = parts.pop();
+      return { firstName: parts.join(" "), lastName };
+    }
+
+    function hasKeyword(text, keywords) {
+      return keywords.some((kw) => {
+        if (kw.length <= 2) {
+          return new RegExp(`\\b${kw}\\b`).test(text);
+        }
+        return text.includes(kw);
+      });
+    }
+
+    function extractValueFromLine(line, keywords) {
+      let result = line || "";
+      const lower = normalizeText(result);
+
+      if (/[:=]/.test(result)) {
+        const parts = result.split(/[:=]/);
+        if (parts.length > 1) {
+          result = parts.slice(1).join(":");
+        }
+      } else if (lower.includes("-")) {
+        const parts = result.split("-");
+        if (parts.length > 1) {
+          result = parts.slice(1).join("-");
+        }
+      }
+
+      keywords.forEach((keyword) => {
+        result = result.replace(new RegExp(keyword, "ig"), "");
+      });
+
+      return result
+        .replace(/^[\s:;\-–—]+/, "")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+    }
+
+    function findNameLine(lines) {
+      const nameBlockers = [
+        "portable",
+        "mobile",
+        "tel",
+        "telephone",
+        "interphone",
+        "inter",
+        "porte",
+        "esc",
+        "escalier",
+        "etage",
+        "flr",
+        "adresse",
+        "domicile",
+        "rue",
+      ];
+
+      for (const line of lines) {
+        const normalized = normalizeText(line);
+        if (!normalized) continue;
+        if (/\d/.test(normalized)) continue;
+        if (hasKeyword(normalized, nameBlockers)) continue;
+        if (normalized.split(" ").length >= 2) return line;
+      }
+
+      return lines.find((line) => normalizeText(line)) || "";
+    }
+
+    function parseContactOCR(rawText) {
+      const lines = (rawText || "")
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      const nameLine = findNameLine(lines);
+      let nameParts = splitFullName(nameLine);
+      const nameKeywords = ["nom", "prenom", "contact header"];
+
+      if (!nameParts.firstName && !nameParts.lastName) {
+        const keywordLine = lines.find((line) => hasKeyword(normalizeText(line), nameKeywords));
+        if (keywordLine) {
+          const extracted = extractValueFromLine(keywordLine, nameKeywords);
+          nameParts = splitFullName(extracted);
+        }
+      }
+
+      const fields = {
+        firstName: nameParts.firstName,
+        lastName: nameParts.lastName,
+        phone: "",
+        address: "",
+        door: "",
+        stair: "",
+        floor: "",
+        intercom: "",
+      };
+
+      const phoneKeywords = ["portable", "mobile", "tel", "telephone"];
+      const addressLabelKeywords = ["adresse", "domicile"];
+      const addressStreetKeywords = [
+        "rue",
+        "avenue",
+        "av",
+        "boulevard",
+        "bd",
+        "chemin",
+        "impasse",
+        "allee",
+        "allee",
+        "route",
+        "place",
+        "quai",
+      ];
+      const addressKeywords = [...addressLabelKeywords, ...addressStreetKeywords];
+      const intercomKeywords = ["interphone", "inter"];
+      const doorKeywords = ["code porte", "porte"];
+      const stairKeywords = ["esc", "escalier"];
+      const floorKeywords = ["etage", "flr", "etg"];
+
+      const fieldOrder = [
+        { key: "intercom", keywords: intercomKeywords },
+        { key: "door", keywords: doorKeywords },
+        { key: "stair", keywords: stairKeywords },
+        { key: "floor", keywords: floorKeywords },
+        { key: "address", keywords: addressKeywords },
+      ];
+
+      for (let i = 0; i < lines.length; i += 1) {
+        const line = lines[i];
+        if (!line) continue;
+        if (line === nameLine) continue;
+
+        const normalized = normalizeText(line);
+
+        const phoneMatch = line.match(/(\+?\d[\d\s().-]{5,}\d)/);
+        if (!fields.phone && (hasKeyword(normalized, phoneKeywords) || phoneMatch)) {
+          fields.phone = phoneMatch
+            ? phoneMatch[1].replace(/\s+/g, " ").trim()
+            : extractValueFromLine(line, phoneKeywords);
+          continue;
+        }
+
+        const matchedField = fieldOrder.find(
+          (field) => !fields[field.key] && hasKeyword(normalized, field.keywords)
+        );
+
+        if (matchedField) {
+          let value = "";
+
+          if (matchedField.key === "address") {
+            const hasLabel = hasKeyword(normalized, addressLabelKeywords);
+            value = hasLabel ? extractValueFromLine(line, addressLabelKeywords) : line.trim();
+          } else {
+            value = extractValueFromLine(line, matchedField.keywords);
+          }
+
+          if (!value && lines[i + 1]) {
+            const nextLine = lines[i + 1].trim();
+            const nextNormalized = normalizeText(nextLine);
+            const isNextKeyword = [phoneKeywords, ...fieldOrder.map((f) => f.keywords)].some(
+              (keywords) => hasKeyword(nextNormalized, keywords)
+            );
+            if (!isNextKeyword) {
+              value = nextLine;
+              i += 1;
+            }
+          }
+
+          if (value) {
+            fields[matchedField.key] = value;
+          }
+          continue;
+        }
+
+        if (!fields.address && hasKeyword(normalized, addressKeywords)) {
+          fields.address = line.trim();
+        }
+      }
+
+      return fields;
+    }
+
+    function applyPatientData(data, { persist = true } = {}) {
       const addrEl = $("#patientAddress");
       const phoneEl = $("#patientPhone");
       const nameEl = $("#patientName");
       const initialEl = $("#patientInitial");
+      const firstNameEl = $("#patientFirstName");
+      const lastNameEl = $("#patientLastName");
+      const doorEl = $("#patientDoor");
+      const stairEl = $("#patientStair");
+      const floorEl = $("#patientFloor");
+      const intercomEl = $("#patientIntercom");
+      const infosEl = $("#patientInfos");
+      const rhythmEl = $("#patientRhythm");
+      const chipName = $("#patientSummary");
 
+      if (!addrEl || !phoneEl || !nameEl || !initialEl) return;
+
+      const firstName = data.firstName ?? "";
+      const lastName = data.lastName ?? "";
+      const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
+
+      if (firstNameEl) firstNameEl.textContent = firstName;
+      if (lastNameEl) lastNameEl.textContent = lastName;
+      if (nameEl) nameEl.textContent = fullName;
+
+      if (addrEl) addrEl.textContent = data.address ?? "";
+      if (phoneEl) phoneEl.textContent = data.phone ?? "";
+      if (doorEl) doorEl.textContent = data.door ?? "";
+      if (stairEl) stairEl.textContent = data.stair ?? "";
+      if (floorEl) floorEl.textContent = data.floor ?? "";
+      if (intercomEl) intercomEl.textContent = data.intercom ?? "";
+
+      if (infosEl && data.infos !== undefined) infosEl.textContent = data.infos;
+      if (rhythmEl && data.rhythm !== undefined) rhythmEl.textContent = data.rhythm;
+      if (chipName && data.summary !== undefined) chipName.textContent = data.summary;
+
+      const initial = fullName.trim().charAt(0).toUpperCase() || "?";
+      initialEl.textContent = initial;
+
+      if (persist) {
+        save("patient", {
+          firstName,
+          lastName,
+          name: fullName,
+          address: data.address ?? "",
+          phone: data.phone ?? "",
+          door: data.door ?? "",
+          stair: data.stair ?? "",
+          floor: data.floor ?? "",
+          intercom: data.intercom ?? "",
+          infos: infosEl ? infosEl.textContent : "",
+          rhythm: rhythmEl ? rhythmEl.textContent : "",
+          summary: chipName ? chipName.textContent : "",
+        });
+      }
+    }
+
+    function setupPatient() {
       const btnCopy = $("#btnCopyAddress");
       const btnMaps = $("#btnOpenMaps");
       const btnWaze = $("#btnOpenWaze");
 
-      const chipName = $("#patientSummary");
-
       const stored = load("patient", null);
       if (stored) {
-        if (stored.name) nameEl.textContent = stored.name;
-        if (stored.address) addrEl.textContent = stored.address;
-        if (stored.phone) phoneEl.textContent = stored.phone;
-        if (stored.summary) chipName.textContent = stored.summary;
+        const legacyName =
+          stored.name && (!stored.firstName && !stored.lastName)
+            ? splitFullName(stored.name)
+            : { firstName: stored.firstName || "", lastName: stored.lastName || "" };
+        applyPatientData(
+          {
+            firstName: legacyName.firstName,
+            lastName: legacyName.lastName,
+            address: stored.address || "",
+            phone: stored.phone || "",
+            door: stored.door || "",
+            stair: stored.stair || "",
+            floor: stored.floor || "",
+            intercom: stored.intercom || "",
+            infos: stored.infos,
+            rhythm: stored.rhythm,
+            summary: stored.summary,
+          },
+          { persist: false }
+        );
+      } else {
+        applyPatientData(
+          {
+            firstName: $("#patientFirstName")?.textContent || "",
+            lastName: $("#patientLastName")?.textContent || "",
+            address: $("#patientAddress")?.textContent || "",
+            phone: $("#patientPhone")?.textContent || "",
+            door: $("#patientDoor")?.textContent || "",
+            stair: $("#patientStair")?.textContent || "",
+            floor: $("#patientFloor")?.textContent || "",
+            intercom: $("#patientIntercom")?.textContent || "",
+            infos: $("#patientInfos")?.textContent || "",
+            rhythm: $("#patientRhythm")?.textContent || "",
+            summary: $("#patientSummary")?.textContent || "",
+          },
+          { persist: true }
+        );
       }
-
-      function savePatient() {
-        save("patient", {
-          name: nameEl.textContent,
-          address: addrEl.textContent,
-          phone: phoneEl.textContent,
-          summary: chipName.textContent,
-        });
-
-        const name = nameEl.textContent || "";
-        const firstLetter = name.trim().charAt(0).toUpperCase() || "J";
-        initialEl.textContent = firstLetter;
-      }
-
-      savePatient();
 
       if (btnCopy) {
         btnCopy.addEventListener("click", async () => {
+          const addrEl = $("#patientAddress");
           try {
             await navigator.clipboard.writeText(addrEl.textContent);
             btnCopy.textContent = "Copié ✔";
@@ -1900,6 +2216,7 @@
 
       if (btnMaps) {
         btnMaps.addEventListener("click", () => {
+          const addrEl = $("#patientAddress");
           const addr = addrEl.textContent || "";
           if (!addr) {
             alert("Ajoute d’abord une adresse.");
@@ -1915,6 +2232,7 @@
 
       if (btnWaze) {
         btnWaze.addEventListener("click", () => {
+          const addrEl = $("#patientAddress");
           const addr = addrEl.textContent || "";
           if (!addr) {
             alert("Ajoute d’abord une adresse.");
@@ -1925,6 +2243,62 @@
           window.open(url, "_blank");
         });
       }
+    }
+
+    function setupContactImport() {
+      const btn = $("#btnImportContact");
+      const input = $("#contactImportInput");
+      const status = $("#contactImportStatus");
+
+      if (!btn || !input || !status) return;
+
+      btn.addEventListener("click", () => {
+        input.click();
+      });
+
+      input.addEventListener("change", async (event) => {
+        const file = event.target.files && event.target.files[0];
+        if (!file) return;
+
+        btn.disabled = true;
+        status.textContent = "Lecture OCR en cours…";
+
+        try {
+          const result = await Tesseract.recognize(file, "fra", {
+            logger: (m) => {
+              if (m.status === "recognizing text") {
+                const pct = Math.round((m.progress || 0) * 100);
+                status.textContent = `Analyse OCR : ${pct}%`;
+              }
+            },
+          });
+
+          const text = result?.data?.text || "";
+          const parsed = parseContactOCR(text);
+
+          applyPatientData({
+            firstName: parsed.firstName,
+            lastName: parsed.lastName,
+            address: parsed.address,
+            phone: parsed.phone,
+            door: parsed.door,
+            stair: parsed.stair,
+            floor: parsed.floor,
+            intercom: parsed.intercom,
+          });
+
+          status.textContent = "Import terminé ✅";
+        } catch (error) {
+          console.error(error);
+          status.textContent = "Impossible de lire la capture (OCR indisponible).";
+        } finally {
+          btn.disabled = false;
+          input.value = "";
+          setTimeout(() => {
+            status.textContent = "";
+          }, 3500);
+        }
+      });
     }
 
     function setupGraphModal() {
@@ -1991,6 +2365,7 @@
       setupOrdos();
       setupMemos();
       setupPatient();
+      setupContactImport();
       setupGraphModal();
       setupNavigation();
     });
