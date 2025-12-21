@@ -611,6 +611,82 @@
       letter-spacing: 0.05em;
     }
 
+    .patient-toolbar {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .patient-select-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .patient-select-row select {
+      flex: 1;
+    }
+
+    .patient-actions-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .patient-actions-row button {
+      flex: 1;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--text-soft);
+      font-size: 11px;
+      padding: 6px 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      cursor: pointer;
+    }
+
+    .patient-actions-row button.primary {
+      background: linear-gradient(to right, #2563eb, #4f46e5);
+      color: #fff;
+      border-color: rgba(191, 219, 254, 0.75);
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.35);
+    }
+
+    .patient-actions-row button.danger {
+      border-color: rgba(248, 113, 113, 0.7);
+      color: #fecaca;
+    }
+
+    .patient-form-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
+    .patient-form-grid textarea {
+      min-height: 70px;
+    }
+
+    .patient-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 10px;
+      color: var(--text-soft);
+      margin-top: 2px;
+    }
+
+    .patient-empty {
+      font-size: 11px;
+      color: var(--text-soft);
+      padding: 6px 8px;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px dashed rgba(148, 163, 184, 0.6);
+    }
+
     .pill-soft {
       font-size: 11px;
       padding: 4px 8px;
@@ -775,7 +851,19 @@
       padding: 10px 10px 8px;
       margin-bottom: 8px;
       font-size: 11px;
-      min-height: 160px;
+      min-height: 220px;
+    }
+
+    .chart-wrapper {
+      position: relative;
+      width: 100%;
+      height: 220px;
+    }
+
+    @media (max-width: 480px) {
+      .chart-wrapper {
+        height: 200px;
+      }
     }
 
     .graph-footer {
@@ -784,6 +872,30 @@
       align-items: center;
       font-size: 10px;
       color: var(--text-soft);
+    }
+
+    .graph-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .graph-action-btn {
+      border-radius: 999px;
+      border: 1px dashed rgba(148, 163, 184, 0.7);
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--text-soft);
+      font-size: 10px;
+      padding: 4px 8px;
+      cursor: pointer;
+    }
+
+    .chart-note {
+      font-size: 10px;
+      color: var(--text-soft);
+      margin-top: 6px;
     }
 
     .graph-legend {
@@ -1031,6 +1143,10 @@
 
     <main>
       <nav class="nav-tabs">
+        <button class="nav-item" data-screen="patient">
+          <span class="icon">👤</span>
+          <span>Patient</span>
+        </button>
         <button class="nav-item active" data-screen="transmissions">
           <span class="icon">⚡</span>
           <span>Trans</span>
@@ -1046,10 +1162,6 @@
         <button class="nav-item" data-screen="rappels">
           <span class="icon">⏰</span>
           <span>Rappels</span>
-        </button>
-        <button class="nav-item" data-screen="patient">
-          <span class="icon">👤</span>
-          <span>Patient</span>
         </button>
       </nav>
 
@@ -1306,78 +1418,87 @@
       <!-- Écran Patient -->
       <section class="screen" id="screen-patient">
         <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <span class="icon">👤</span>
+              <span>Gestion multi-patients</span>
+            </div>
+            <span class="pill">LocalStorage activé</span>
+          </div>
+
           <div class="patient-header">
             <div class="patient-main">
-              <div class="avatar" id="patientInitial">J</div>
+              <div class="avatar" id="patientAvatar">?</div>
               <div class="patient-name">
-                <strong id="patientName">Mme L</strong>
-                <span id="patientShortInfo">Patiente référente du tour</span>
+                <strong id="patientPreviewName">Aucun patient</strong>
+                <span id="patientPreviewInfo">Sélectionnez ou créez un patient</span>
               </div>
             </div>
-            <div class="patient-actions">
-              <button id="btnCopyAddress">
-                <span>📍</span>
-                <span>Copier adresse</span>
-              </button>
-              <button id="btnOpenMaps">
-                <span>🗺️</span>
-                <span>Ouvrir Maps</span>
-              </button>
-              <button id="btnOpenWaze">
-                <span>🚗</span>
-                <span>Ouvrir Waze</span>
-              </button>
-            </div>
           </div>
 
-          <div class="patient-info-grid">
-            <div>
-              <span class="label">Téléphone</span><br />
-              <span id="patientPhone">06 00 00 00 00</span>
+          <div class="patient-toolbar">
+            <div class="patient-select-row">
+              <select id="patientSelect">
+                <option value="">— Nouveau patient —</option>
+              </select>
             </div>
-            <div>
-              <span class="label">Adresse</span><br />
-              <span id="patientAddress">12 rue de la Tour, 75000 Paris</span>
+            <div class="patient-actions-row">
+              <button id="btnNewPatient">
+                <span>➕</span>
+                <span>Nouveau</span>
+              </button>
+              <button class="primary" id="btnSavePatient">
+                <span>💾</span>
+                <span>Enregistrer</span>
+              </button>
+              <button class="danger" id="btnDeletePatient">
+                <span>🗑️</span>
+                <span>Supprimer</span>
+              </button>
             </div>
-            <div>
-              <span class="label">Infos pratiques</span><br />
-              <span id="patientInfos">Digicode, étage, ascenseur, etc.</span>
-            </div>
-            <div>
-              <span class="label">Rythme / pansements</span><br />
-              <span id="patientRhythm">Matin et soir, J1/J3/J5 pansement</span>
-            </div>
-          </div>
-
-          <div style="margin-top: 10px;">
-            <span class="label">Résumé patient / consignes</span>
-            <div style="margin-top: 4px;">
-              <span class="pill-soft">
-                <span class="dot"></span>
-                <span id="patientSummary">Patiente obèse avec dyspnée à l’effort, pansement VAC jambe gauche, surveiller TA + SpO₂.</span>
-              </span>
-            </div>
+            <div class="patient-meta" id="patientMetaInfo">Aucun patient enregistré.</div>
           </div>
         </div>
 
         <div class="card">
           <div class="card-header">
             <div class="card-title">
-              <span class="icon">📌</span>
-              <span>Mémos patient</span>
+              <span class="icon">📝</span>
+              <span>Dossier patient</span>
             </div>
+            <span class="card-subtitle">Fiche complète & éditable</span>
           </div>
 
-          <div class="patient-search">
-            <div class="patient-search-row">
-              <input id="patientNotesInput" type="text" placeholder="Ex : préfère douche le soir, fils prévient si retard…" />
-              <button id="btnAddPatientNote">
-                <span>➕</span>
-              </button>
+          <div class="patient-form-grid">
+            <div class="field-group">
+              <label for="patientNom">Nom + prénom</label>
+              <input id="patientNom" type="text" placeholder="Mme L..." />
+            </div>
+            <div class="field-group">
+              <label for="patientTel">Téléphone</label>
+              <input id="patientTel" type="tel" placeholder="06 00 00 00 00" />
+            </div>
+            <div class="field-group">
+              <label for="patientAdresse">Adresse</label>
+              <input id="patientAdresse" type="text" placeholder="12 rue..." />
+            </div>
+            <div class="field-group">
+              <label for="patientPathologie">Pathologie / diagnostic principal</label>
+              <input id="patientPathologie" type="text" placeholder="Cancer ORL..." />
+            </div>
+            <div class="field-group">
+              <label for="patientAtcds">ATCDs</label>
+              <textarea id="patientAtcds" placeholder="HTA, diabète…"></textarea>
+            </div>
+            <div class="field-group">
+              <label for="patientAllergies">Allergies</label>
+              <textarea id="patientAllergies" placeholder="Pénicilline..."></textarea>
+            </div>
+            <div class="field-group">
+              <label for="patientNotes">Notes libres</label>
+              <textarea id="patientNotes" placeholder="Douleur ++, consignes..."></textarea>
             </div>
           </div>
-
-          <div class="memo-list" id="patientMemoList"></div>
         </div>
       </section>
     </main>
@@ -1397,32 +1518,16 @@
       </div>
 
       <div class="graph-body">
-        <div id="graphCanvas">
-          Graphique à venir (placeholder).
+        <div class="chart-wrapper">
+          <canvas id="graphCanvas"></canvas>
         </div>
+        <div class="chart-note">Zoom molette + glisser pour naviguer dans l’historique.</div>
       </div>
 
       <div class="graph-footer">
-        <div class="graph-legend">
-          <div class="legend-item">
-            <span class="legend-color ta"></span>
-            <span>TA</span>
-          </div>
-          <div class="legend-item">
-            <span class="legend-color spo2"></span>
-            <span>SpO₂</span>
-          </div>
-          <div class="legend-item">
-            <span class="legend-color temp"></span>
-            <span>T°</span>
-          </div>
-          <div class="legend-item">
-            <span class="legend-color fc"></span>
-            <span>FC</span>
-          </div>
-        </div>
-        <div class="graph-tip">
-          Graphique local, basé sur les constantes saisies.
+        <div class="graph-tip">Graphique local, basé sur les constantes saisies.</div>
+        <div class="graph-actions">
+          <button class="graph-action-btn" id="graphResetZoom">Réinitialiser zoom</button>
         </div>
       </div>
     </div>
@@ -1433,6 +1538,8 @@
     <span id="debugText">Écran actif : Transmissions</span>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
   <script>
     const $ = (sel) => document.querySelector(sel);
     const $$ = (sel) => document.querySelectorAll(sel);
@@ -1453,6 +1560,13 @@
       } catch {
         console.warn("Impossible de sauvegarder dans localStorage", key);
       }
+    }
+
+    function toNumber(value) {
+      if (value === null || value === undefined) return null;
+      const cleaned = String(value).replace(",", ".").trim();
+      const number = Number(cleaned);
+      return Number.isFinite(number) ? number : null;
     }
 
     function getDateTimeFromInputs(dateEl, timeEl) {
@@ -1675,6 +1789,212 @@
 
           miniList.appendChild(item);
         });
+
+      updateConstantesChart();
+    }
+
+    let constantesChart;
+
+    function buildConstantesChartData() {
+      const data = load("constantes", [])
+        .slice()
+        .sort((a, b) => (a.dateTime || 0) - (b.dateTime || 0));
+
+      const labels = data.map((ct) => {
+        const dt = ct.dateTime ? new Date(ct.dateTime) : null;
+        return dt ? formatDateTimeLabel(dt) : "";
+      });
+
+      const taSyst = data.map((ct) => toNumber(ct.taSyst));
+      const taDiast = data.map((ct) => toNumber(ct.taDiast));
+      const spo2 = data.map((ct) => toNumber(ct.spo2));
+      const temp = data.map((ct) => toNumber(ct.temp));
+      const fc = data.map((ct) => toNumber(ct.fc));
+
+      return { labels, taSyst, taDiast, spo2, temp, fc };
+    }
+
+    function ensureConstantesChart() {
+      const canvas = $("#graphCanvas");
+      if (!canvas || typeof Chart === "undefined") return;
+      if (constantesChart) return;
+
+      if (window.ChartZoom) {
+        Chart.register(window.ChartZoom);
+      }
+
+      const baseData = buildConstantesChartData();
+
+      constantesChart = new Chart(canvas, {
+        type: "line",
+        data: {
+          labels: baseData.labels,
+          datasets: [
+            {
+              label: "TA systolique",
+              data: baseData.taSyst,
+              borderColor: "#f97316",
+              backgroundColor: "rgba(249, 115, 22, 0.15)",
+              tension: 0.4,
+              borderWidth: 2,
+              pointRadius: 2,
+              yAxisID: "yTa",
+            },
+            {
+              label: "TA diastolique",
+              data: baseData.taDiast,
+              borderColor: "#fb7185",
+              backgroundColor: "rgba(251, 113, 133, 0.15)",
+              tension: 0.4,
+              borderWidth: 2,
+              pointRadius: 2,
+              yAxisID: "yTa",
+            },
+            {
+              label: "SpO₂",
+              data: baseData.spo2,
+              borderColor: "#22c55e",
+              backgroundColor: "rgba(34, 197, 94, 0.12)",
+              tension: 0.35,
+              borderWidth: 2,
+              pointRadius: 2,
+              yAxisID: "yOxy",
+            },
+            {
+              label: "Température",
+              data: baseData.temp,
+              borderColor: "#3b82f6",
+              backgroundColor: "rgba(59, 130, 246, 0.12)",
+              tension: 0.35,
+              borderWidth: 2,
+              pointRadius: 2,
+              yAxisID: "yTemp",
+            },
+            {
+              label: "FC",
+              data: baseData.fc,
+              borderColor: "#facc15",
+              backgroundColor: "rgba(250, 204, 21, 0.15)",
+              tension: 0.35,
+              borderWidth: 2,
+              pointRadius: 2,
+              yAxisID: "yTa",
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: "index",
+            intersect: false,
+          },
+          plugins: {
+            legend: {
+              position: "bottom",
+              labels: {
+                color: "#cbd5f5",
+                boxWidth: 10,
+                boxHeight: 10,
+              },
+            },
+            tooltip: {
+              backgroundColor: "rgba(15, 23, 42, 0.95)",
+              borderColor: "rgba(148, 163, 184, 0.6)",
+              borderWidth: 1,
+              titleColor: "#e2e8f0",
+              bodyColor: "#e2e8f0",
+            },
+            zoom: {
+              pan: {
+                enabled: true,
+                mode: "x",
+              },
+              zoom: {
+                wheel: {
+                  enabled: true,
+                },
+                pinch: {
+                  enabled: true,
+                },
+                mode: "x",
+              },
+            },
+          },
+          scales: {
+            x: {
+              ticks: {
+                color: "#94a3b8",
+                maxRotation: 0,
+                autoSkip: true,
+                maxTicksLimit: 6,
+              },
+              grid: {
+                color: "rgba(148, 163, 184, 0.1)",
+              },
+            },
+            yTa: {
+              position: "left",
+              ticks: {
+                color: "#fbbf24",
+              },
+              grid: {
+                color: "rgba(148, 163, 184, 0.12)",
+              },
+              title: {
+                display: true,
+                text: "TA / FC",
+                color: "#fbbf24",
+                font: { size: 10 },
+              },
+            },
+            yOxy: {
+              position: "right",
+              ticks: {
+                color: "#22c55e",
+              },
+              grid: {
+                drawOnChartArea: false,
+              },
+              title: {
+                display: true,
+                text: "SpO₂",
+                color: "#22c55e",
+                font: { size: 10 },
+              },
+            },
+            yTemp: {
+              position: "right",
+              offset: true,
+              ticks: {
+                color: "#60a5fa",
+              },
+              grid: {
+                drawOnChartArea: false,
+              },
+              title: {
+                display: true,
+                text: "Température",
+                color: "#60a5fa",
+                font: { size: 10 },
+              },
+            },
+          },
+        },
+      });
+    }
+
+    function updateConstantesChart() {
+      ensureConstantesChart();
+      if (!constantesChart) return;
+      const data = buildConstantesChartData();
+      constantesChart.data.labels = data.labels;
+      constantesChart.data.datasets[0].data = data.taSyst;
+      constantesChart.data.datasets[1].data = data.taDiast;
+      constantesChart.data.datasets[2].data = data.spo2;
+      constantesChart.data.datasets[3].data = data.temp;
+      constantesChart.data.datasets[4].data = data.fc;
+      constantesChart.update();
     }
 
     function setupConstantes() {
@@ -1850,81 +2170,162 @@
     }
 
     function setupPatient() {
-      const addrEl = $("#patientAddress");
-      const phoneEl = $("#patientPhone");
-      const nameEl = $("#patientName");
-      const initialEl = $("#patientInitial");
+      const selectEl = $("#patientSelect");
+      const btnNew = $("#btnNewPatient");
+      const btnSave = $("#btnSavePatient");
+      const btnDelete = $("#btnDeletePatient");
 
-      const btnCopy = $("#btnCopyAddress");
-      const btnMaps = $("#btnOpenMaps");
-      const btnWaze = $("#btnOpenWaze");
+      const avatarEl = $("#patientAvatar");
+      const previewName = $("#patientPreviewName");
+      const previewInfo = $("#patientPreviewInfo");
+      const metaInfo = $("#patientMetaInfo");
 
-      const chipName = $("#patientSummary");
+      const fields = {
+        nom: $("#patientNom"),
+        tel: $("#patientTel"),
+        adresse: $("#patientAdresse"),
+        pathologie: $("#patientPathologie"),
+        atcds: $("#patientAtcds"),
+        allergies: $("#patientAllergies"),
+        notes: $("#patientNotes"),
+      };
 
-      const stored = load("patient", null);
-      if (stored) {
-        if (stored.name) nameEl.textContent = stored.name;
-        if (stored.address) addrEl.textContent = stored.address;
-        if (stored.phone) phoneEl.textContent = stored.phone;
-        if (stored.summary) chipName.textContent = stored.summary;
+      let patients = load("patients", []);
+      let selectedId = load("selectedPatientId", "");
+
+      function generateId() {
+        if (window.crypto && window.crypto.randomUUID) {
+          return window.crypto.randomUUID();
+        }
+        return `patient-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
       }
 
-      function savePatient() {
-        save("patient", {
-          name: nameEl.textContent,
-          address: addrEl.textContent,
-          phone: phoneEl.textContent,
-          summary: chipName.textContent,
+      function updateMeta() {
+        metaInfo.textContent = patients.length
+          ? `${patients.length} patient(s) enregistré(s)`
+          : "Aucun patient enregistré.";
+      }
+
+      function setPreview(patient) {
+        if (!patient) {
+          avatarEl.textContent = "?";
+          previewName.textContent = "Aucun patient";
+          previewInfo.textContent = "Sélectionnez ou créez un patient";
+          return;
+        }
+        const label = patient.nom || "Patient sans nom";
+        avatarEl.textContent = label.trim().charAt(0).toUpperCase() || "?";
+        previewName.textContent = label;
+        const infoParts = [];
+        if (patient.tel) infoParts.push(patient.tel);
+        if (patient.pathologie) infoParts.push(patient.pathologie);
+        previewInfo.textContent = infoParts.length ? infoParts.join(" • ") : "Dossier patient";
+      }
+
+      function fillForm(patient) {
+        fields.nom.value = patient?.nom || "";
+        fields.tel.value = patient?.tel || "";
+        fields.adresse.value = patient?.adresse || "";
+        fields.pathologie.value = patient?.pathologie || "";
+        fields.atcds.value = patient?.atcds || "";
+        fields.allergies.value = patient?.allergies || "";
+        fields.notes.value = patient?.notes || "";
+      }
+
+      function renderSelect() {
+        if (!selectEl) return;
+        selectEl.innerHTML = `<option value="">— Nouveau patient —</option>`;
+        patients.forEach((patient) => {
+          const option = document.createElement("option");
+          option.value = patient.id;
+          option.textContent = patient.nom || "Patient sans nom";
+          selectEl.appendChild(option);
         });
-
-        const name = nameEl.textContent || "";
-        const firstLetter = name.trim().charAt(0).toUpperCase() || "J";
-        initialEl.textContent = firstLetter;
+        selectEl.value = selectedId || "";
       }
 
-      savePatient();
+      function selectPatient(id) {
+        selectedId = id || "";
+        save("selectedPatientId", selectedId);
+        const patient = patients.find((p) => p.id === selectedId);
+        fillForm(patient || null);
+        setPreview(patient || null);
+        updateMeta();
+      }
 
-      if (btnCopy) {
-        btnCopy.addEventListener("click", async () => {
-          try {
-            await navigator.clipboard.writeText(addrEl.textContent);
-            btnCopy.textContent = "Copié ✔";
-            setTimeout(() => {
-              btnCopy.innerHTML = "<span>📍</span><span>Copier adresse</span>";
-            }, 1500);
-          } catch {
-            alert("Impossible de copier l’adresse (permissions navigateur).");
-          }
+      function getFormData() {
+        return {
+          id: selectedId || generateId(),
+          nom: fields.nom.value.trim(),
+          tel: fields.tel.value.trim(),
+          adresse: fields.adresse.value.trim(),
+          pathologie: fields.pathologie.value.trim(),
+          atcds: fields.atcds.value.trim(),
+          allergies: fields.allergies.value.trim(),
+          notes: fields.notes.value.trim(),
+        };
+      }
+
+      if (selectEl) {
+        selectEl.addEventListener("change", () => {
+          selectPatient(selectEl.value);
         });
       }
 
-      if (btnMaps) {
-        btnMaps.addEventListener("click", () => {
-          const addr = addrEl.textContent || "";
-          if (!addr) {
-            alert("Ajoute d’abord une adresse.");
+      if (btnNew) {
+        btnNew.addEventListener("click", () => {
+          selectedId = "";
+          save("selectedPatientId", "");
+          if (selectEl) selectEl.value = "";
+          fillForm(null);
+          setPreview(null);
+          updateMeta();
+        });
+      }
+
+      if (btnSave) {
+        btnSave.addEventListener("click", () => {
+          const data = getFormData();
+          if (!data.nom) {
+            alert("Merci d’indiquer un nom/prénom pour enregistrer le patient.");
             return;
           }
-          const url =
-            "https://www.google.com/maps/dir/?api=1&destination=" +
-            encodeURIComponent(addr) +
-            "&travelmode=walking";
-          window.open(url, "_blank");
+
+          const existingIndex = patients.findIndex((p) => p.id === data.id);
+          if (existingIndex >= 0) {
+            patients[existingIndex] = data;
+          } else {
+            patients.push(data);
+          }
+
+          selectedId = data.id;
+          save("patients", patients);
+          save("selectedPatientId", selectedId);
+          renderSelect();
+          selectPatient(selectedId);
         });
       }
 
-      if (btnWaze) {
-        btnWaze.addEventListener("click", () => {
-          const addr = addrEl.textContent || "";
-          if (!addr) {
-            alert("Ajoute d’abord une adresse.");
-            return;
-          }
-          const url =
-            "https://waze.com/ul?q=" + encodeURIComponent(addr);
-          window.open(url, "_blank");
+      if (btnDelete) {
+        btnDelete.addEventListener("click", () => {
+          if (!selectedId) return;
+          const patient = patients.find((p) => p.id === selectedId);
+          if (!patient) return;
+          const confirmDelete = confirm(
+            `Supprimer le patient "${patient.nom || "sans nom"}" ?`
+          );
+          if (!confirmDelete) return;
+          patients = patients.filter((p) => p.id !== selectedId);
+          save("patients", patients);
+          selectedId = patients[0]?.id || "";
+          save("selectedPatientId", selectedId);
+          renderSelect();
+          selectPatient(selectedId);
         });
       }
+
+      renderSelect();
+      selectPatient(selectedId);
     }
 
     function setupGraphModal() {
@@ -1932,11 +2333,13 @@
       const modal = $("#graphModal");
       const openBtn = $("#btnOpenGraph");
       const closeBtn = $("#graphCloseBtn");
+      const resetBtn = $("#graphResetZoom");
 
       if (!backdrop || !modal) return;
 
       function open() {
         backdrop.classList.add("active");
+        updateConstantesChart();
       }
 
       function close() {
@@ -1945,6 +2348,13 @@
 
       if (openBtn) openBtn.addEventListener("click", open);
       if (closeBtn) closeBtn.addEventListener("click", close);
+      if (resetBtn) {
+        resetBtn.addEventListener("click", () => {
+          if (constantesChart && constantesChart.resetZoom) {
+            constantesChart.resetZoom();
+          }
+        });
+      }
       backdrop.addEventListener("click", (e) => {
         if (e.target === backdrop) close();
       });
