@@ -1306,6 +1306,26 @@
       <!-- Écran Patient -->
       <section class="screen" id="screen-patient">
         <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <span class="icon">📲</span>
+              <span>Importer depuis capture iPhone (OCR)</span>
+            </div>
+            <span class="card-subtitle">Colle le texte OCR brut pour remplir automatiquement nom, adresse et infos pratiques.</span>
+          </div>
+
+          <div class="field-group">
+            <label for="patientOcrRaw">Texte OCR brut</label>
+            <textarea id="patientOcrRaw" placeholder="Ex : Jean Pierre Perrier&#10;Adresse domicile&#10;12 rue de la Tour&#10;75000 Paris&#10;Porte A, interphone 951, étage 3"></textarea>
+          </div>
+
+          <button class="btn-primary" id="btnParsePatientOcr">
+            <span class="icon">✨</span>
+            <span>Structurer les infos patient</span>
+          </button>
+        </div>
+
+        <div class="card">
           <div class="patient-header">
             <div class="patient-main">
               <div class="avatar" id="patientInitial">J</div>
@@ -1854,6 +1874,9 @@
       const phoneEl = $("#patientPhone");
       const nameEl = $("#patientName");
       const initialEl = $("#patientInitial");
+      const infosEl = $("#patientInfos");
+      const ocrRawEl = $("#patientOcrRaw");
+      const ocrBtn = $("#btnParsePatientOcr");
 
       const btnCopy = $("#btnCopyAddress");
       const btnMaps = $("#btnOpenMaps");
@@ -1866,6 +1889,7 @@
         if (stored.name) nameEl.textContent = stored.name;
         if (stored.address) addrEl.textContent = stored.address;
         if (stored.phone) phoneEl.textContent = stored.phone;
+        if (stored.infos) infosEl.textContent = stored.infos;
         if (stored.summary) chipName.textContent = stored.summary;
       }
 
@@ -1874,6 +1898,7 @@
           name: nameEl.textContent,
           address: addrEl.textContent,
           phone: phoneEl.textContent,
+          infos: infosEl.textContent,
           summary: chipName.textContent,
         });
 
@@ -1883,6 +1908,278 @@
       }
 
       savePatient();
+
+      const ignoredUiTokens = [
+        "modifier",
+        "annuler",
+        "terminé",
+        "contacts",
+        "contact",
+        "fiche",
+        "partager",
+        "message",
+        "appeler",
+        "facetime",
+        "tel",
+        "tél",
+        "mobile",
+        "portable",
+        "mail",
+        "email",
+        "iphone",
+      ];
+
+      const nameStopWords = [
+        "adresse",
+        "domicile",
+        "bureau",
+        "travail",
+        "interphone",
+        "porte",
+        "escalier",
+        "étage",
+        "etage",
+        "digicode",
+      ];
+
+      const addressLabels = ["adresse", "domicile"];
+      const infoLabels = ["porte", "escalier", "interphone", "étage", "etage", "digicode", "code", "infos"];
+
+      const addressKeywords = [
+        "rue",
+        "avenue",
+        "av",
+        "boulevard",
+        "bd",
+        "chemin",
+        "impasse",
+        "allée",
+        "allee",
+        "place",
+        "route",
+        "résidence",
+        "residence",
+        "lotissement",
+        "quai",
+        "square",
+      ];
+
+      const infoKeywords = [
+        "porte",
+        "escalier",
+        "interphone",
+        "étage",
+        "etage",
+        "digicode",
+        "code",
+        "bâtiment",
+        "batiment",
+        "entrée",
+        "entree",
+        "ascenseur",
+        "appt",
+        "appartement",
+        "sonnette",
+        "boîte",
+        "boite",
+      ];
+
+      function normalizeLine(line) {
+        return line
+          .replace(/[•·▪︎◦]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+          .replace(/^[-–—]+/, "")
+          .replace(/\s*:\s*/g, " ");
+      }
+
+      function splitLineParts(line) {
+        const parts = line.split(/[;,]/).map((part) => normalizeLine(part));
+        return parts.filter(Boolean);
+      }
+
+      function isMostlyLetters(line) {
+        return /[a-zA-ZÀ-ÖØ-öø-ÿ]/.test(line) && !/\d/.test(line);
+      }
+
+      function containsKeyword(line, keywords) {
+        return keywords.some((kw) => line.includes(kw));
+      }
+
+      function cleanNameLine(line) {
+        return line
+          .replace(/^(mme|madame|m\.|mr|monsieur|dr|docteur)\s+/i, "")
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+
+      function parseName(line) {
+        const cleaned = cleanNameLine(line);
+        const tokens = cleaned.split(" ").filter(Boolean);
+        if (!tokens.length) return { firstName: "", lastName: "" };
+
+        const upperTokens = tokens.map((token) => {
+          const letters = token.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ]/g, "");
+          if (!letters) return false;
+          return letters === letters.toUpperCase();
+        });
+
+        let lastNameTokens = [];
+        let firstNameTokens = [];
+
+        if (upperTokens[0] && upperTokens.some((isUpper) => !isUpper)) {
+          const splitIndex = upperTokens.findIndex((isUpper) => !isUpper);
+          lastNameTokens = tokens.slice(0, splitIndex);
+          firstNameTokens = tokens.slice(splitIndex);
+        } else if (upperTokens[upperTokens.length - 1] && upperTokens.some((isUpper) => !isUpper)) {
+          let splitIndex = upperTokens.length - 1;
+          while (splitIndex > 0 && upperTokens[splitIndex]) splitIndex -= 1;
+          lastNameTokens = tokens.slice(splitIndex + 1);
+          firstNameTokens = tokens.slice(0, splitIndex + 1);
+        } else if (tokens.length > 1) {
+          lastNameTokens = tokens.slice(-1);
+          firstNameTokens = tokens.slice(0, -1);
+        } else {
+          firstNameTokens = tokens;
+        }
+
+        return {
+          firstName: firstNameTokens.join(" ").trim(),
+          lastName: lastNameTokens.join(" ").trim(),
+        };
+      }
+
+      function uniqueList(lines) {
+        const seen = new Set();
+        return lines.filter((line) => {
+          const key = line.toLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      }
+
+      function parseOcrPatient(rawText) {
+        const lines = rawText
+          .split(/\n+/)
+          .flatMap((line) => splitLineParts(line))
+          .map((line) => normalizeLine(line))
+          .filter(Boolean);
+
+        const filtered = lines.filter((line) => {
+          const lower = line.toLowerCase();
+          if (ignoredUiTokens.some((token) => lower === token)) return false;
+          if (ignoredUiTokens.some((token) => lower.startsWith(`${token} `))) return false;
+          return true;
+        });
+
+        const nameLineIndex = filtered.findIndex((line) => {
+          const lower = line.toLowerCase();
+          if (!isMostlyLetters(line)) return false;
+          if (containsKeyword(lower, nameStopWords)) return false;
+          return true;
+        });
+
+        let nameLine = "";
+        let remainingLines = filtered.slice();
+        if (nameLineIndex >= 0) {
+          nameLine = filtered[nameLineIndex];
+          remainingLines.splice(nameLineIndex, 1);
+        }
+
+        const addressLines = [];
+        const infoLines = [];
+        let expectAddress = false;
+        let expectInfos = false;
+
+        remainingLines.forEach((line) => {
+          const lower = line.toLowerCase();
+          const isAddressLabel = containsKeyword(lower, addressLabels);
+          const isInfoLabel = containsKeyword(lower, infoLabels);
+
+          if (isAddressLabel && line.length <= 18) {
+            expectAddress = true;
+            const cleaned = addressLabels.reduce(
+              (acc, label) => acc.replace(new RegExp(`\\b${label}\\b`, "gi"), ""),
+              line
+            );
+            if (cleaned.trim()) addressLines.push(cleaned.trim());
+            return;
+          }
+
+          if (isInfoLabel && line.length <= 25) {
+            expectInfos = true;
+            const cleaned = infoLabels.reduce(
+              (acc, label) => acc.replace(new RegExp(`\\b${label}\\b`, "gi"), ""),
+              line
+            );
+            if (cleaned.trim()) infoLines.push(cleaned.trim());
+            return;
+          }
+
+          if (expectAddress) {
+            addressLines.push(line);
+            expectAddress = false;
+            return;
+          }
+
+          if (expectInfos) {
+            infoLines.push(line);
+            expectInfos = false;
+            return;
+          }
+
+          if (containsKeyword(lower, infoKeywords)) {
+            infoLines.push(line);
+            return;
+          }
+
+          const looksLikeAddress =
+            /\b\d{5}\b/.test(line) ||
+            /^\d+\s/.test(line) ||
+            containsKeyword(lower, addressKeywords) ||
+            containsKeyword(lower, addressLabels);
+
+          if (looksLikeAddress) {
+            const cleaned = addressLabels.reduce(
+              (acc, label) => acc.replace(new RegExp(`\\b${label}\\b`, "gi"), ""),
+              line
+            );
+            addressLines.push(cleaned.trim());
+          }
+        });
+
+        const finalAddress = uniqueList(addressLines).join(", ");
+        const finalInfos = uniqueList(infoLines).join(", ");
+        const nameParts = nameLine ? parseName(nameLine) : { firstName: "", lastName: "" };
+        const fullName = [nameParts.firstName, nameParts.lastName].filter(Boolean).join(" ").trim();
+
+        return {
+          fullName,
+          address: finalAddress,
+          infos: finalInfos,
+        };
+      }
+
+      if (ocrBtn && ocrRawEl) {
+        ocrBtn.addEventListener("click", () => {
+          const raw = ocrRawEl.value.trim();
+          if (!raw) return;
+
+          const parsed = parseOcrPatient(raw);
+          if (parsed.fullName) {
+            nameEl.textContent = parsed.fullName;
+          }
+          if (parsed.address) {
+            addrEl.textContent = parsed.address;
+          }
+          if (parsed.infos) {
+            infosEl.textContent = parsed.infos;
+          }
+
+          savePatient();
+        });
+      }
 
       if (btnCopy) {
         btnCopy.addEventListener("click", async () => {
