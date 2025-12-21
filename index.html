@@ -630,6 +630,52 @@
       background: #22c55e;
     }
 
+    .patient-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .patient-toolbar select {
+      flex: 1;
+      min-width: 160px;
+    }
+
+    .patient-toolbar .btn-ghost {
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--text-soft);
+      font-size: 10px;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+
+    .patient-toolbar .btn-danger {
+      border: 1px solid rgba(248, 113, 113, 0.6);
+      color: #fecaca;
+      background: rgba(127, 29, 29, 0.35);
+    }
+
+    .patient-form {
+      display: grid;
+      gap: 8px;
+    }
+
+    .patient-form .field-row {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
+
+    .ocr-status {
+      font-size: 11px;
+      color: var(--text-soft);
+      margin-top: 6px;
+    }
+
     .graph-header {
       display: flex;
       align-items: center;
@@ -1306,12 +1352,19 @@
       <!-- Écran Patient -->
       <section class="screen" id="screen-patient">
         <div class="card">
+          <div class="patient-toolbar">
+            <label for="patientSelect">Patient actuel :</label>
+            <select id="patientSelect"></select>
+            <button class="btn-ghost" id="btnNewPatient">+ Nouveau patient</button>
+            <button class="btn-ghost btn-danger" id="btnDeletePatient">Supprimer ce patient</button>
+          </div>
+
           <div class="patient-header">
             <div class="patient-main">
               <div class="avatar" id="patientInitial">J</div>
               <div class="patient-name">
                 <strong id="patientName">Mme L</strong>
-                <span id="patientShortInfo">Patiente référente du tour</span>
+                <span id="patientShortInfo">Fiche patient active</span>
               </div>
             </div>
             <div class="patient-actions">
@@ -1330,34 +1383,65 @@
             </div>
           </div>
 
-          <div class="patient-info-grid">
-            <div>
-              <span class="label">Téléphone</span><br />
-              <span id="patientPhone">06 00 00 00 00</span>
+          <button class="btn-primary" id="btnImportPatientOcr">
+            <span class="icon">📷</span>
+            <span>Importer depuis capture Contact iPhone</span>
+          </button>
+          <input id="patientOcrInput" type="file" accept="image/*" style="display: none;" />
+          <div class="ocr-status" id="patientOcrStatus"></div>
+
+          <div class="patient-form">
+            <div class="field-group">
+              <label for="patientNameInput">Nom / Prénom</label>
+              <input id="patientNameInput" type="text" placeholder="Nom / Prénom" />
             </div>
-            <div>
-              <span class="label">Adresse</span><br />
-              <span id="patientAddress">12 rue de la Tour, 75000 Paris</span>
+
+            <div class="field-row">
+              <div class="field-group">
+                <label for="patientPhoneInput">Téléphone</label>
+                <input id="patientPhoneInput" type="tel" placeholder="06 00 00 00 00" />
+              </div>
+              <div class="field-group">
+                <label for="patientRhythmInput">Rythme / pansements</label>
+                <input id="patientRhythmInput" type="text" placeholder="Matin et soir, J1/J3/J5…" />
+              </div>
             </div>
-            <div>
-              <span class="label">Infos pratiques</span><br />
-              <span id="patientInfos">Digicode, étage, ascenseur, etc.</span>
+
+            <div class="field-group">
+              <label for="patientAddressInput">Adresse</label>
+              <textarea id="patientAddressInput" placeholder="Adresse complète…"></textarea>
             </div>
-            <div>
-              <span class="label">Rythme / pansements</span><br />
-              <span id="patientRhythm">Matin et soir, J1/J3/J5 pansement</span>
+
+            <div class="field-group">
+              <label for="patientInfosInput">Infos pratiques / accès domicile</label>
+              <textarea id="patientInfosInput" placeholder="Porte, interphone, escalier, étage…"></textarea>
+            </div>
+
+            <div class="field-group">
+              <label for="patientSummaryInput">Résumé patient / consignes</label>
+              <textarea id="patientSummaryInput" placeholder="Résumé patient, consignes…"></textarea>
+            </div>
+
+            <div class="field-group">
+              <label for="patientPathologyInput">Pathologie</label>
+              <textarea id="patientPathologyInput" placeholder="Pathologie principale…"></textarea>
+            </div>
+
+            <div class="field-group">
+              <label for="patientAtcdInput">ATCD</label>
+              <textarea id="patientAtcdInput" placeholder="Antécédents médicaux…"></textarea>
+            </div>
+
+            <div class="field-group">
+              <label for="patientAllergiesInput">Allergies</label>
+              <textarea id="patientAllergiesInput" placeholder="Allergies connues…"></textarea>
             </div>
           </div>
 
-          <div style="margin-top: 10px;">
-            <span class="label">Résumé patient / consignes</span>
-            <div style="margin-top: 4px;">
-              <span class="pill-soft">
-                <span class="dot"></span>
-                <span id="patientSummary">Patiente obèse avec dyspnée à l’effort, pansement VAC jambe gauche, surveiller TA + SpO₂.</span>
-              </span>
-            </div>
-          </div>
+          <button class="btn-primary" id="btnSavePatient">
+            <span class="icon">💾</span>
+            <span>Enregistrer / Mettre à jour le patient</span>
+          </button>
         </div>
 
         <div class="card">
@@ -1433,6 +1517,7 @@
     <span id="debugText">Écran actif : Transmissions</span>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script>
     const $ = (sel) => document.querySelector(sel);
     const $$ = (sel) => document.querySelectorAll(sel);
@@ -1850,44 +1935,363 @@
     }
 
     function setupPatient() {
-      const addrEl = $("#patientAddress");
-      const phoneEl = $("#patientPhone");
+      const selectEl = $("#patientSelect");
+      const btnNew = $("#btnNewPatient");
+      const btnDelete = $("#btnDeletePatient");
+      const btnSave = $("#btnSavePatient");
+      const btnImport = $("#btnImportPatientOcr");
+      const fileInput = $("#patientOcrInput");
+      const ocrStatus = $("#patientOcrStatus");
+
       const nameEl = $("#patientName");
       const initialEl = $("#patientInitial");
+
+      const nameInput = $("#patientNameInput");
+      const phoneInput = $("#patientPhoneInput");
+      const addressInput = $("#patientAddressInput");
+      const infosInput = $("#patientInfosInput");
+      const rhythmInput = $("#patientRhythmInput");
+      const summaryInput = $("#patientSummaryInput");
+      const pathologyInput = $("#patientPathologyInput");
+      const atcdInput = $("#patientAtcdInput");
+      const allergiesInput = $("#patientAllergiesInput");
 
       const btnCopy = $("#btnCopyAddress");
       const btnMaps = $("#btnOpenMaps");
       const btnWaze = $("#btnOpenWaze");
 
-      const chipName = $("#patientSummary");
+      if (!selectEl) return;
 
-      const stored = load("patient", null);
-      if (stored) {
-        if (stored.name) nameEl.textContent = stored.name;
-        if (stored.address) addrEl.textContent = stored.address;
-        if (stored.phone) phoneEl.textContent = stored.phone;
-        if (stored.summary) chipName.textContent = stored.summary;
+      const state = {
+        patients: [],
+        currentId: null,
+      };
+
+      const labelsToSkip = /(portable|mobile|téléphone|tel|domicile|maison|travail|fax|interphone|étage|etage|escalier|porte|code|appt|appartement|adresse|email|mail)/i;
+
+      function createId() {
+        return `patient-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
       }
 
-      function savePatient() {
-        save("patient", {
-          name: nameEl.textContent,
-          address: addrEl.textContent,
-          phone: phoneEl.textContent,
-          summary: chipName.textContent,
-        });
+      function createEmptyPatient() {
+        return {
+          id: createId(),
+          nom: "",
+          telephone: "",
+          adresse: "",
+          infosPratiques: "",
+          rythme: "",
+          summary: "",
+          pathologie: "",
+          atcd: "",
+          allergies: "",
+        };
+      }
 
-        const name = nameEl.textContent || "";
-        const firstLetter = name.trim().charAt(0).toUpperCase() || "J";
+      function loadState() {
+        let patients = load("patients", []);
+        let currentId = load("currentPatientId", null);
+
+        if (!Array.isArray(patients)) patients = [];
+
+        const legacy = load("patient", null);
+        if (!patients.length && legacy) {
+          const migrated = createEmptyPatient();
+          migrated.nom = legacy.name || "";
+          migrated.adresse = legacy.address || "";
+          migrated.telephone = legacy.phone || "";
+          migrated.summary = legacy.summary || "";
+          patients = [migrated];
+          currentId = migrated.id;
+        }
+
+        if (!patients.length) {
+          const empty = createEmptyPatient();
+          patients = [empty];
+          currentId = empty.id;
+        }
+
+        if (!patients.find((p) => p.id === currentId)) {
+          currentId = patients[0].id;
+        }
+
+        state.patients = patients;
+        state.currentId = currentId;
+        save("patients", patients);
+        save("currentPatientId", currentId);
+      }
+
+      function getCurrentPatient() {
+        return state.patients.find((p) => p.id === state.currentId);
+      }
+
+      function renderSelect() {
+        selectEl.innerHTML = "";
+        state.patients.forEach((patient) => {
+          const option = document.createElement("option");
+          option.value = patient.id;
+          option.textContent = patient.nom?.trim() || "Patient sans nom";
+          if (patient.id === state.currentId) option.selected = true;
+          selectEl.appendChild(option);
+        });
+      }
+
+      function setHeaderName(name) {
+        const display = name?.trim() || "Patient";
+        nameEl.textContent = display;
+        const firstLetter = display.trim().charAt(0).toUpperCase() || "J";
         initialEl.textContent = firstLetter;
       }
 
-      savePatient();
+      function fillForm(patient) {
+        nameInput.value = patient?.nom || "";
+        phoneInput.value = patient?.telephone || "";
+        addressInput.value = patient?.adresse || "";
+        infosInput.value = patient?.infosPratiques || "";
+        rhythmInput.value = patient?.rythme || "";
+        summaryInput.value = patient?.summary || "";
+        pathologyInput.value = patient?.pathologie || "";
+        atcdInput.value = patient?.atcd || "";
+        allergiesInput.value = patient?.allergies || "";
+        setHeaderName(patient?.nom || "");
+      }
+
+      function readForm() {
+        return {
+          nom: nameInput.value.trim(),
+          telephone: phoneInput.value.trim(),
+          adresse: addressInput.value.trim(),
+          infosPratiques: infosInput.value.trim(),
+          rythme: rhythmInput.value.trim(),
+          summary: summaryInput.value.trim(),
+          pathologie: pathologyInput.value.trim(),
+          atcd: atcdInput.value.trim(),
+          allergies: allergiesInput.value.trim(),
+        };
+      }
+
+      function renderCurrentPatient() {
+        const patient = getCurrentPatient();
+        fillForm(patient || createEmptyPatient());
+      }
+
+      function updateCurrentPatientInState(data) {
+        let patient = getCurrentPatient();
+        if (!patient) {
+          patient = createEmptyPatient();
+          state.patients.push(patient);
+          state.currentId = patient.id;
+        }
+        Object.assign(patient, data);
+        save("patients", state.patients);
+        save("currentPatientId", state.currentId);
+        renderSelect();
+        setHeaderName(patient.nom);
+      }
+
+      function showOcrStatus(message) {
+        if (!ocrStatus) return;
+        ocrStatus.textContent = message;
+      }
+
+      function formatPhone(raw) {
+        const digits = raw.replace(/\D/g, "");
+        if (digits.length === 10) {
+          return digits.replace(/(\d{2})(?=\d)/g, "$1 ").trim();
+        }
+        return raw.trim();
+      }
+
+      function extractName(lines) {
+        const nameLine = lines.find(
+          (line) => /[A-Za-zÀ-ÿ]/.test(line) && !/\d/.test(line) && !labelsToSkip.test(line)
+        );
+        return nameLine || "";
+      }
+
+      function extractPhone(text) {
+        const match = text.match(/0[1-9](?:[ .-]?\d{2}){4}/);
+        if (!match) return "";
+        return formatPhone(match[0]);
+      }
+
+      function extractAddress(lines) {
+        const labelIndex = lines.findIndex((line) => /(domicile|adresse|maison|home)/i.test(line));
+        let addressLines = [];
+
+        if (labelIndex !== -1) {
+          for (let i = labelIndex + 1; i < lines.length; i += 1) {
+            const line = lines[i];
+            if (!line) continue;
+            if (labelsToSkip.test(line)) break;
+            addressLines.push(line);
+            if (addressLines.length >= 3) break;
+          }
+        }
+
+        if (!addressLines.length) {
+          const street = lines.find(
+            (line) =>
+              /\d{1,4}\s+\S+/.test(line) &&
+              /(rue|avenue|av\.|boulevard|bd|route|chemin|impasse|allee|allée|place|quai|cours|résidence|residence)/i.test(line)
+          );
+          const postal = lines.find((line) => /\b\d{5}\b/.test(line));
+          const country = lines.find((line) => /france/i.test(line));
+
+          if (street) addressLines.push(street);
+          if (postal && postal !== street) addressLines.push(postal);
+          if (country && country !== postal) addressLines.push(country);
+        }
+
+        const unique = [...new Set(addressLines)];
+        return unique.join("\n").trim();
+      }
+
+      function extractLabeledValue(lines, regex) {
+        for (let i = 0; i < lines.length; i += 1) {
+          const line = lines[i];
+          if (regex.test(line)) {
+            let value = line.replace(regex, "").replace(/[:\-–]/g, " ").trim();
+            if (!value && lines[i + 1]) {
+              value = lines[i + 1].trim();
+            }
+            if (value && !regex.test(value)) {
+              return value;
+            }
+          }
+        }
+        return "";
+      }
+
+      function extractInfosPratiques(lines) {
+        const porte = extractLabeledValue(lines, /\b(porte|code porte|pte|appt|appartement)\b/i);
+        const escalier = extractLabeledValue(lines, /\b(escalier|esc)\b/i);
+        const etage = extractLabeledValue(lines, /\b(étage|etage)\b/i);
+        const interphone = extractLabeledValue(lines, /\b(interphone|inter)\b/i);
+
+        const parts = [];
+        if (porte) parts.push(`Porte : ${porte}`);
+        if (escalier) parts.push(`Escalier : ${escalier}`);
+        if (etage) parts.push(`Étage : ${etage}`);
+        if (interphone) parts.push(`Interphone : ${interphone}`);
+        return parts.join(" — ");
+      }
+
+      async function handleOcr(file) {
+        if (!file || !window.Tesseract) {
+          showOcrStatus("OCR indisponible dans ce navigateur.");
+          return;
+        }
+
+        showOcrStatus("Analyse OCR en cours…");
+
+        try {
+          const result = await window.Tesseract.recognize(file, "fra");
+          const text = result?.data?.text || "";
+          const cleanedLines = text
+            .split("\n")
+            .map((line) => line.replace(/\s+/g, " ").trim())
+            .filter(Boolean);
+
+          if (!cleanedLines.length) {
+            showOcrStatus("OCR impossible, réessaie avec une capture écran plus nette.");
+            return;
+          }
+
+          const name = extractName(cleanedLines);
+          const phone = extractPhone(text);
+          const address = extractAddress(cleanedLines);
+          const infos = extractInfosPratiques(cleanedLines);
+
+          if (name) nameInput.value = name;
+          if (phone) phoneInput.value = phone;
+          if (address) addressInput.value = address;
+          if (infos) infosInput.value = infos;
+
+          setHeaderName(nameInput.value);
+          renderSelect();
+          showOcrStatus("OCR terminé : champs mis à jour. Pense à enregistrer le patient.");
+        } catch (error) {
+          console.error(error);
+          showOcrStatus("OCR impossible, réessaie avec une capture écran plus nette.");
+        }
+      }
+
+      loadState();
+      renderSelect();
+      renderCurrentPatient();
+
+      nameInput.addEventListener("input", () => {
+        setHeaderName(nameInput.value);
+        const currentOption = [...selectEl.options].find((opt) => opt.value === state.currentId);
+        if (currentOption) {
+          currentOption.textContent = nameInput.value.trim() || "Patient sans nom";
+        }
+      });
+
+      selectEl.addEventListener("change", () => {
+        state.currentId = selectEl.value;
+        save("currentPatientId", state.currentId);
+        renderCurrentPatient();
+      });
+
+      if (btnNew) {
+        btnNew.addEventListener("click", () => {
+          const fresh = createEmptyPatient();
+          state.patients.push(fresh);
+          state.currentId = fresh.id;
+          save("patients", state.patients);
+          save("currentPatientId", state.currentId);
+          renderSelect();
+          fillForm(fresh);
+        });
+      }
+
+      if (btnDelete) {
+        btnDelete.addEventListener("click", () => {
+          const patient = getCurrentPatient();
+          if (!patient) return;
+          const confirmDelete = window.confirm("Supprimer ce patient ?");
+          if (!confirmDelete) return;
+
+          state.patients = state.patients.filter((p) => p.id !== patient.id);
+          if (!state.patients.length) {
+            const empty = createEmptyPatient();
+            state.patients = [empty];
+            state.currentId = empty.id;
+          } else {
+            state.currentId = state.patients[0].id;
+          }
+          save("patients", state.patients);
+          save("currentPatientId", state.currentId);
+          renderSelect();
+          renderCurrentPatient();
+        });
+      }
+
+      if (btnSave) {
+        btnSave.addEventListener("click", () => {
+          const data = readForm();
+          updateCurrentPatientInState(data);
+        });
+      }
+
+      if (btnImport && fileInput) {
+        btnImport.addEventListener("click", () => {
+          fileInput.value = "";
+          fileInput.click();
+        });
+
+        fileInput.addEventListener("change", async (event) => {
+          const file = event.target.files?.[0];
+          await handleOcr(file);
+        });
+      }
 
       if (btnCopy) {
         btnCopy.addEventListener("click", async () => {
           try {
-            await navigator.clipboard.writeText(addrEl.textContent);
+            await navigator.clipboard.writeText(addressInput.value);
             btnCopy.textContent = "Copié ✔";
             setTimeout(() => {
               btnCopy.innerHTML = "<span>📍</span><span>Copier adresse</span>";
@@ -1900,7 +2304,7 @@
 
       if (btnMaps) {
         btnMaps.addEventListener("click", () => {
-          const addr = addrEl.textContent || "";
+          const addr = addressInput.value.trim();
           if (!addr) {
             alert("Ajoute d’abord une adresse.");
             return;
@@ -1915,13 +2319,12 @@
 
       if (btnWaze) {
         btnWaze.addEventListener("click", () => {
-          const addr = addrEl.textContent || "";
+          const addr = addressInput.value.trim();
           if (!addr) {
             alert("Ajoute d’abord une adresse.");
             return;
           }
-          const url =
-            "https://waze.com/ul?q=" + encodeURIComponent(addr);
+          const url = "https://waze.com/ul?q=" + encodeURIComponent(addr);
           window.open(url, "_blank");
         });
       }
