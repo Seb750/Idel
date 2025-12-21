@@ -364,6 +364,17 @@
       font-size: 12px;
     }
 
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+    }
+
     .checkbox-row {
       display: flex;
       align-items: center;
@@ -409,6 +420,12 @@
       align-items: center;
       justify-content: center;
       font-size: 11px;
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      box-shadow: none;
     }
 
     .btn-secondary {
@@ -530,6 +547,68 @@
 
     .chip.muted span.dot {
       background: #9ca3af;
+    }
+
+    .ocr-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .ocr-status {
+      font-size: 11px;
+      color: var(--text-soft);
+      padding: 6px 8px;
+      border-radius: 10px;
+      border: 1px dashed rgba(148, 163, 184, 0.6);
+      background: rgba(15, 23, 42, 0.6);
+      display: none;
+    }
+
+    body.light .ocr-status {
+      background: rgba(248, 250, 252, 0.95);
+    }
+
+    .ocr-status.active {
+      display: block;
+    }
+
+    .ocr-status.loading {
+      color: var(--accent-strong);
+      border-color: rgba(59, 130, 246, 0.6);
+      background: rgba(37, 99, 235, 0.12);
+    }
+
+    .ocr-status.error {
+      color: var(--danger);
+      border-color: rgba(248, 113, 113, 0.6);
+      background: rgba(248, 113, 113, 0.12);
+    }
+
+    .ocr-status.success {
+      color: var(--success);
+      border-color: rgba(34, 197, 94, 0.6);
+      background: rgba(34, 197, 94, 0.12);
+    }
+
+    .ocr-debug {
+      margin-top: 4px;
+      font-size: 10px;
+      color: var(--text-soft);
+    }
+
+    .ocr-debug summary {
+      cursor: pointer;
+    }
+
+    .ocr-debug pre {
+      margin-top: 6px;
+      padding: 6px 8px;
+      border-radius: 10px;
+      border: 1px dashed rgba(148, 163, 184, 0.6);
+      background: rgba(15, 23, 42, 0.7);
+      white-space: pre-wrap;
+      font-size: 10px;
     }
 
     .patient-header {
@@ -1306,6 +1385,32 @@
       <!-- Écran Patient -->
       <section class="screen" id="screen-patient">
         <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <span class="icon">📷</span>
+              <span>Import OCR Contact</span>
+            </div>
+          </div>
+
+          <div class="subtext">
+            <span>🔍</span>
+            <span>Choisis une capture écran de fiche Contact iPhone pour remplir la fiche.</span>
+          </div>
+
+          <div class="ocr-actions">
+            <button class="btn-primary" id="btnImportContact" type="button">
+              <span>📷 Importer depuis capture écran Contact</span>
+            </button>
+            <input id="contactImageInput" class="sr-only" type="file" accept="image/*" />
+            <div id="ocrStatus" class="ocr-status" aria-live="polite"></div>
+            <details class="ocr-debug" id="ocrDebug" hidden>
+              <summary>Notes OCR (debug)</summary>
+              <pre id="ocrDebugText"></pre>
+            </details>
+          </div>
+        </div>
+
+        <div class="card">
           <div class="patient-header">
             <div class="patient-main">
               <div class="avatar" id="patientInitial">J</div>
@@ -1433,6 +1538,7 @@
     <span id="debugText">Écran actif : Transmissions</span>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script>
     const $ = (sel) => document.querySelector(sel);
     const $$ = (sel) => document.querySelectorAll(sel);
@@ -1854,12 +1960,18 @@
       const phoneEl = $("#patientPhone");
       const nameEl = $("#patientName");
       const initialEl = $("#patientInitial");
+      const infosEl = $("#patientInfos");
 
       const btnCopy = $("#btnCopyAddress");
       const btnMaps = $("#btnOpenMaps");
       const btnWaze = $("#btnOpenWaze");
 
       const chipName = $("#patientSummary");
+      const ocrBtn = $("#btnImportContact");
+      const ocrInput = $("#contactImageInput");
+      const ocrStatus = $("#ocrStatus");
+      const ocrDebug = $("#ocrDebug");
+      const ocrDebugText = $("#ocrDebugText");
 
       const stored = load("patient", null);
       if (stored) {
@@ -1867,6 +1979,7 @@
         if (stored.address) addrEl.textContent = stored.address;
         if (stored.phone) phoneEl.textContent = stored.phone;
         if (stored.summary) chipName.textContent = stored.summary;
+        if (stored.infos) infosEl.textContent = stored.infos;
       }
 
       function savePatient() {
@@ -1875,6 +1988,7 @@
           address: addrEl.textContent,
           phone: phoneEl.textContent,
           summary: chipName.textContent,
+          infos: infosEl.textContent,
         });
 
         const name = nameEl.textContent || "";
@@ -1883,6 +1997,238 @@
       }
 
       savePatient();
+
+      function setOcrStatus(message, type) {
+        if (!ocrStatus) return;
+        if (!message) {
+          ocrStatus.className = "ocr-status";
+          ocrStatus.textContent = "";
+          return;
+        }
+        ocrStatus.className = `ocr-status active ${type || ""}`.trim();
+        ocrStatus.textContent = message;
+      }
+
+      function showOcrDebug(text) {
+        if (!ocrDebug || !ocrDebugText) return;
+        if (!text) {
+          ocrDebug.hidden = true;
+          ocrDebugText.textContent = "";
+          return;
+        }
+        ocrDebug.hidden = false;
+        ocrDebugText.textContent = text.trim();
+      }
+
+      function sanitizeName(raw) {
+        return raw
+          .replace(/[^\p{L}\s'-]/gu, "")
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+
+      function formatPhone(raw) {
+        const match = raw.match(/(\+?\d[\d\s().-]{7,}\d)/);
+        if (!match) return "";
+        const cleaned = match[0].replace(/[^\d+]/g, "");
+        if (/^\d{10}$/.test(cleaned)) {
+          return cleaned.replace(/(\d{2})(?=\d)/g, "$1 ").trim();
+        }
+        return cleaned.startsWith("+") ? cleaned : match[0].trim();
+      }
+
+      function parseContactFromOcr(text) {
+        const lines = (text || "")
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
+
+        const lowerLines = lines.map((line) => line.toLowerCase());
+        const nameSkipKeywords = [
+          "portable",
+          "téléphone",
+          "telephone",
+          "tel",
+          "mobile",
+          "fixe",
+          "domicile",
+          "adresse",
+          "maison",
+          "travail",
+          "bureau",
+          "email",
+          "e-mail",
+          "mail",
+          "facetime",
+          "sms",
+          "message",
+          "notes",
+          "anniversaire",
+        ];
+
+        let name = "";
+        for (let i = 0; i < lines.length; i += 1) {
+          const line = lines[i];
+          const lower = lowerLines[i];
+          if (nameSkipKeywords.some((kw) => lower.includes(kw))) continue;
+          if (/[0-9]/.test(line)) continue;
+          if (line.includes("@")) continue;
+          const cleaned = sanitizeName(line);
+          if (cleaned) {
+            name = cleaned;
+            break;
+          }
+        }
+
+        const phoneKeywords = ["portable", "mobile", "téléphone", "telephone", "tel", "fixe"];
+        let phone = "";
+        const phoneLineWithLabel = lines.find((line, idx) => {
+          const lower = lowerLines[idx];
+          return phoneKeywords.some((kw) => lower.includes(kw)) && /(\+?\d[\d\s().-]{7,}\d)/.test(line);
+        });
+        if (phoneLineWithLabel) {
+          phone = formatPhone(phoneLineWithLabel);
+        } else {
+          const phoneLine = lines.find((line) => /(\+?\d[\d\s().-]{7,}\d)/.test(line));
+          if (phoneLine) phone = formatPhone(phoneLine);
+        }
+
+        const addressKeywords = ["domicile", "adresse", "maison", "travail", "bureau"];
+        const stopKeywords = [
+          "portable",
+          "mobile",
+          "téléphone",
+          "telephone",
+          "tel",
+          "fixe",
+          "email",
+          "e-mail",
+          "mail",
+          "facetime",
+          "sms",
+          "message",
+          "notes",
+          "anniversaire",
+        ];
+
+        function isStopLine(line) {
+          const lower = line.toLowerCase();
+          if (stopKeywords.some((kw) => lower.includes(kw))) return true;
+          if (/(\+?\d[\d\s().-]{7,}\d)/.test(line)) return true;
+          return false;
+        }
+
+        let addressLines = [];
+        for (let i = 0; i < lines.length; i += 1) {
+          const lower = lowerLines[i];
+          if (addressKeywords.some((kw) => lower.includes(kw))) {
+            const cleaned = lines[i]
+              .replace(new RegExp(`^.*(${addressKeywords.join("|")})\\s*:?\\s*`, "i"), "")
+              .trim();
+            if (cleaned) addressLines.push(cleaned);
+            for (let j = i + 1; j < lines.length; j += 1) {
+              if (isStopLine(lines[j])) break;
+              addressLines.push(lines[j].trim());
+            }
+            break;
+          }
+        }
+
+        if (!addressLines.length) {
+          for (let i = 0; i < lines.length; i += 1) {
+            if (/\b\d{5}\b/.test(lines[i]) || /^\d+\s+\p{L}/u.test(lines[i])) {
+              const startIndex = i > 0 && !isStopLine(lines[i - 1]) ? i - 1 : i;
+              for (let j = startIndex; j < lines.length; j += 1) {
+                if (isStopLine(lines[j])) break;
+                addressLines.push(lines[j].trim());
+              }
+              break;
+            }
+          }
+        }
+
+        const address = Array.from(new Set(addressLines))
+          .join(", ")
+          .replace(/\s+/g, " ")
+          .replace(/\s+,/g, ",")
+          .trim();
+
+        let porte = "";
+        let etage = "";
+        let interphone = "";
+
+        lines.forEach((line) => {
+          const porteMatch = line.match(/porte\s*[:\-]?\s*([A-Za-z0-9]+)/i);
+          if (porteMatch && !porte) porte = porteMatch[1];
+          const etageMatch = line.match(/(?:étage|etage|etg)\s*[:\-]?\s*([A-Za-z0-9]+)/i);
+          if (etageMatch && !etage) etage = etageMatch[1];
+          const interMatch = line.match(/inter(?:phone)?\s*[:\-]?\s*([A-Za-z0-9]+)/i);
+          if (interMatch && !interphone) interphone = interMatch[1];
+        });
+
+        const infoParts = [];
+        if (porte) infoParts.push(`Porte : ${porte}`);
+        if (etage) infoParts.push(`Étage : ${etage}`);
+        if (interphone) infoParts.push(`Interphone : ${interphone}`);
+
+        return {
+          name,
+          phone,
+          address,
+          infos: infoParts.join(" — "),
+        };
+      }
+
+      async function handleOcrFile(file) {
+        if (!file) return;
+        if (!window.Tesseract) {
+          setOcrStatus("Erreur OCR. Réessaie avec une capture plus nette.", "error");
+          return;
+        }
+        setOcrStatus("OCR en cours…", "loading");
+        if (ocrBtn) ocrBtn.disabled = true;
+
+        try {
+          const result = await window.Tesseract.recognize(file, "fra");
+          const text = result?.data?.text || "";
+          showOcrDebug(text);
+
+          const parsed = parseContactFromOcr(text);
+          const hasAny =
+            parsed.name || parsed.phone || parsed.address || parsed.infos;
+
+          if (!hasAny) {
+            setOcrStatus("Erreur OCR. Réessaie avec une capture plus nette.", "error");
+            return;
+          }
+
+          if (parsed.name) nameEl.textContent = parsed.name;
+          if (parsed.phone) phoneEl.textContent = parsed.phone;
+          if (parsed.address) addrEl.textContent = parsed.address;
+          if (parsed.infos) infosEl.textContent = parsed.infos;
+
+          savePatient();
+          setOcrStatus("OCR terminé ✔", "success");
+        } catch (error) {
+          console.error(error);
+          setOcrStatus("Erreur OCR. Réessaie avec une capture plus nette.", "error");
+        } finally {
+          if (ocrBtn) ocrBtn.disabled = false;
+          if (ocrInput) ocrInput.value = "";
+        }
+      }
+
+      if (ocrBtn && ocrInput) {
+        ocrBtn.addEventListener("click", () => {
+          ocrInput.click();
+        });
+
+        ocrInput.addEventListener("change", (event) => {
+          const file = event.target.files && event.target.files[0];
+          if (!file) return;
+          handleOcrFile(file);
+        });
+      }
 
       if (btnCopy) {
         btnCopy.addEventListener("click", async () => {
